@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { statusColors, useTheme } from '@/lib/theme';
+import { moduleAccent, statusColors, useTheme } from '@/lib/theme';
 import { dayLabel, isFuturePeriod, money, moneyShort, num } from '@/lib/format';
 import { MODULE_LABEL, type LedgerRow, type ModuleType, type PeriodSummary } from '@/lib/types';
+import type { ProjectedSite } from '@/lib/api';
 import { PeriodSwitcher } from './pickers';
 import { Txt } from './ui';
 
@@ -97,6 +98,51 @@ function Amount({ label, value, color, strong }: {
       <Txt variant="tiny" color={c.textFaint}>{label}</Txt>
       <Txt variant={strong ? 'money' : 'moneySm'} color={color}>{money(value)}</Txt>
     </View>
+  );
+}
+
+/* ------------------------- Ongorulen site karti -------------------------- */
+
+/**
+ * Gelecek (henuz acilmamis) bir donem icin, o an aktif olan sitelerin
+ * "acilacak" halini gosteren mock kart. Gercek bir ledger_id'si YOKTUR;
+ * bu yuzden LedgerListItem'i degil, kendi sade gorunumunu kullanir —
+ * sahte veriyi gercek bilanco satiri gibi gostermemek icin bilincli
+ * bir ayrim (bkz. useProjectedSites).
+ */
+export function ProjectedSiteListItem({ site, onPress }: {
+  site: ProjectedSite; onPress: (site: ProjectedSite) => void;
+}) {
+  const { c, spacing, radius } = useTheme();
+  return (
+    <Pressable
+      onPress={() => onPress(site)}
+      style={({ pressed }) => ({
+        backgroundColor: pressed ? c.surfaceAlt : c.surface,
+        borderRadius: radius.lg,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.border,
+        borderStyle: 'dashed',
+        padding: spacing.lg,
+        gap: spacing.sm,
+        opacity: 0.6,
+      })}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Txt variant="h3" numberOfLines={1}>{site.site_name}</Txt>
+          <Txt variant="tiny" color={c.textFaint}>{site.site_code} · {dayLabel(site.service_day)}</Txt>
+        </View>
+        <View style={{
+          backgroundColor: c.surfaceAlt, borderRadius: radius.pill,
+          paddingHorizontal: spacing.sm, paddingVertical: 2,
+        }}>
+          <Txt variant="tiny" color={c.textFaint} style={{ fontWeight: '700' }}>Zamanı Gelmedi</Txt>
+        </View>
+      </View>
+
+      <Amount label="Öngörülen Ücret" value={site.monthly_fee} color={c.textMuted} />
+    </Pressable>
   );
 }
 
@@ -228,7 +274,7 @@ export function CashSummaryPanel({ entries, projectedEntries, loading, period, o
   period: string;
   onPeriodChange: (period: string) => void;
 }) {
-  const { c, spacing, radius } = useTheme();
+  const { c, dark, spacing, radius } = useTheme();
   const [expanded, setExpanded] = useState(false);
 
   const hasAnyRealData = entries.some(e => !!e.summary);
@@ -321,7 +367,13 @@ export function CashSummaryPanel({ entries, projectedEntries, loading, period, o
                 }}>
                   {r.hasData ? (
                     <>
-                      <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{MODULE_LABEL[r.module]}</Txt>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                        <View style={{
+                          width: 8, height: 8, borderRadius: 4,
+                          backgroundColor: dark ? moduleAccent[r.module].dark : moduleAccent[r.module].light,
+                        }} />
+                        <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{MODULE_LABEL[r.module]}</Txt>
+                      </View>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                         <BreakdownStat label="Beklenen" value={r.expected} color={c.textMuted} />
                         <BreakdownStat label="Tahsil" value={r.collected} color={c.ok} />

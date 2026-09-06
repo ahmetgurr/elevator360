@@ -99,6 +99,47 @@ export function matchesQuickFilter(row: LedgerRow, key: QuickFilterKey): boolean
   }
 }
 
+/**
+ * Liste sirasi. FilterDropdown'daki "Duruma gore filtrele"den FARKLIDIR:
+ * filtre satirlari GIZLER, sıralama ise HICBIRINI gizlemez — sadece
+ * eslesenleri baş tarafa alir (stabil sort). 'recent' varsayilan ve ayni
+ * zamanda "Filtreyi Kaldır" gorevi gorur (DB zaten updated_at desc verir).
+ */
+export type SortKey = 'recent' | 'due_asc' | 'due_desc' | 'paid' | 'unpaid' | 'partial';
+
+export const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'recent',   label: 'Filtreyi Kaldır (En son işlem gören)' },
+  { key: 'due_asc',  label: 'Zamanı önce olanlar' },
+  { key: 'due_desc', label: 'Zamanı sonra olanlar' },
+  { key: 'paid',     label: 'Ödemesi yapılanlar' },
+  { key: 'unpaid',   label: 'Ödemesi yapılmayanlar' },
+  { key: 'partial',  label: 'Eksik ödeme yapanlar' },
+];
+
+/** Array.prototype.sort (ES2019+) stabildir: eslesmeyenlerin kendi aralarindaki sira bozulmaz */
+export function sortLedgerRows(rows: LedgerRow[], key: SortKey): LedgerRow[] {
+  if (key === 'recent') return rows;
+  const arr = [...rows];
+  switch (key) {
+    case 'due_asc':
+      return arr.sort((a, b) => (a.due_date ?? '9999-99-99').localeCompare(b.due_date ?? '9999-99-99'));
+    case 'due_desc':
+      return arr.sort((a, b) => (b.due_date ?? '0000-00-00').localeCompare(a.due_date ?? '0000-00-00'));
+    case 'paid':
+      return arr.sort((a, b) => Number(Number(b.net_paid) > 0) - Number(Number(a.net_paid) > 0));
+    case 'unpaid':
+      return arr.sort((a, b) => Number(Number(b.net_paid) === 0) - Number(Number(a.net_paid) === 0));
+    case 'partial':
+      return arr.sort((a, b) => Number(isPartial(b)) - Number(isPartial(a)));
+    default:
+      return arr;
+  }
+}
+
+function isPartial(row: LedgerRow): boolean {
+  return row.status_key === 'partial' || row.status_key === 'overdue_partial';
+}
+
 /** public.v_period_summary */
 export interface PeriodSummary {
   module: ModuleType;

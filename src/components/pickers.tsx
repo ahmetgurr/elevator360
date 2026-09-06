@@ -44,12 +44,16 @@ export function SearchBar({ value, onChange, placeholder = 'Site adı ara…' }:
 /** Varsayilan "Tumunu Sec"; secim aninda liste filtrelenir. */
 
 export function FilterDropdown<T extends string>({
-  value, options, onChange, counts,
+  value, options, onChange, counts, compact, title = 'Duruma göre filtrele',
 }: {
   value: T;
   options: { key: T; label: string }[];
   onChange: (v: T) => void;
   counts?: Partial<Record<T, number>>;
+  /** "+ Ekle" ile ayni boyutta kompakt bir pil tetikleyici — or. Sırala menusu */
+  compact?: { icon: string; label: string };
+  /** Modal basligi (varsayilan: durum filtresi metni) */
+  title?: string;
 }) {
   const { c, spacing, radius, font } = useTheme();
   const [open, setOpen] = useState(false);
@@ -57,20 +61,35 @@ export function FilterDropdown<T extends string>({
 
   return (
     <>
-      <Pressable
-        onPress={() => setOpen(true)}
-        style={({ pressed }) => ({
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          backgroundColor: pressed ? c.surfaceAlt : c.surface,
-          borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
-          borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-        })}
-      >
-        <Txt variant="h3">{current.label}</Txt>
-        <Txt variant="small" color={c.textMuted}>
-          {counts?.[value] !== undefined ? `${counts[value]} kayıt  ▾` : '▾'}
-        </Txt>
-      </Pressable>
+      {compact ? (
+        <Pressable
+          onPress={() => setOpen(true)}
+          style={({ pressed }) => ({
+            alignItems: 'center', justifyContent: 'center',
+            paddingHorizontal: spacing.lg,
+            backgroundColor: c.accentSoft,
+            borderRadius: radius.md,
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <Txt variant="h3" color={c.accent} style={{ fontWeight: '700' }}>{compact.icon} {compact.label}</Txt>
+        </Pressable>
+      ) : (
+        <Pressable
+          onPress={() => setOpen(true)}
+          style={({ pressed }) => ({
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            backgroundColor: pressed ? c.surfaceAlt : c.surface,
+            borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
+            borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+          })}
+        >
+          <Txt variant="h3">{current.label}</Txt>
+          <Txt variant="small" color={c.textMuted}>
+            {counts?.[value] !== undefined ? `${counts[value]} kayıt  ▾` : '▾'}
+          </Txt>
+        </Pressable>
+      )}
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable
@@ -82,7 +101,7 @@ export function FilterDropdown<T extends string>({
             style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden' }}
           >
             <View style={{ padding: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border }}>
-              <Txt variant="h3">Duruma göre filtrele</Txt>
+              <Txt variant="h3">{title}</Txt>
             </View>
             <ScrollView style={{ maxHeight: 380 }}>
               {options.map(opt => {

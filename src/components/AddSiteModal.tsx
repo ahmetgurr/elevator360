@@ -27,6 +27,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
 
   const [name, setName] = useState('');
   const [feeText, setFeeText] = useState('');
+  const [notesText, setNotesText] = useState('');
   const [startPeriod, setStartPeriod] = useState(currentPeriod());
   const [nameError, setNameError] = useState('');
   const [feeError, setFeeError] = useState('');
@@ -35,6 +36,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
     if (visible) {
       setName('');
       setFeeText('');
+      setNotesText('');
       setStartPeriod(currentPeriod());
       setNameError('');
       setFeeError('');
@@ -70,7 +72,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
     if (hasError) return;
 
     mutation.mutate(
-      { module, name: trimmedName, monthlyFee: fee, startPeriod },
+      { module, name: trimmedName, monthlyFee: fee, startPeriod, notes: notesText.trim() || null },
       { onSuccess: site => onSuccess({ id: site.id, name: site.name }) },
     );
   }
@@ -131,6 +133,16 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
                   Site, {periodLabel(startPeriod)} döneminden itibaren borçlandırılmaya başlanır.
                 </Txt>
               </View>
+
+              <Field
+                label="Not / Yorum (opsiyonel)"
+                placeholder="Bu siteye dair özel bir durum varsa buraya yazın"
+                value={notesText}
+                onChangeText={setNotesText}
+                multiline
+                numberOfLines={3}
+                style={{ minHeight: 76, textAlignVertical: 'top' }}
+              />
 
               {mutation.isError && (
                 <Txt variant="small" color={c.danger}>{(mutation.error as Error).message}</Txt>

@@ -68,6 +68,14 @@ export interface ProjectedSummary {
   total_expected: number;
 }
 
+/** open_period()'un sozlesme tarihi kontroluyle BIREBIR ayni uygunluk kurali */
+function isEligibleForPeriod(
+  s: { contract_start: string | null; contract_end: string | null }, period: string
+): boolean {
+  return (!s.contract_start || s.contract_start <= period) &&
+         (!s.contract_end || s.contract_end >= period);
+}
+
 /**
  * Henuz acilmamis (gelecek) bir donem icin "ne kadar alacagim olacak"
  * ONGORUSU. KESINLIKLE monthly_ledger'a satir YAZMAZ / OKUMAZ — sadece
@@ -91,14 +99,48 @@ export function useProjectedSummary(module: ModuleType, period: string, enabled 
         .eq('contract_status', 'active');
       if (error) throw new Error(error.message);
 
-      const eligible = (data ?? []).filter((s: { contract_start: string | null; contract_end: string | null }) =>
-        (!s.contract_start || s.contract_start <= period) &&
-        (!s.contract_end || s.contract_end >= period)
+      const eligible = (data ?? []).filter(
+        (s: { contract_start: string | null; contract_end: string | null }) => isEligibleForPeriod(s, period)
       );
       const total = eligible.reduce(
         (sum, s: { monthly_fee: string }) => sum + num(s.monthly_fee), 0
       );
       return { site_count: eligible.length, total_expected: total };
+    },
+  });
+}
+
+export interface ProjectedSite {
+  site_id: string;
+  site_code: string;
+  site_name: string;
+  service_day: number | null;
+  monthly_fee: string;
+}
+
+/**
+ * useProjectedSummary'nin site-bazli karsiligi — liste ekraninda gelecek
+ * ay icin "bu siteler acilacak" kartlarini gostermek icin. Ayni sekilde
+ * monthly_ledger'a HICBIR SEY yazmaz/okumaz, sadece o an uygun (aktif +
+ * sozlesme tarihine giren) siteleri dondurur.
+ */
+export function useProjectedSites(module: ModuleType, period: string, enabled = true) {
+  return useQuery({
+    queryKey: ['projected-sites', module, period],
+    enabled,
+    queryFn: async (): Promise<ProjectedSite[]> => {
+      const { data, error } = await supabase
+        .from('sites')
+        .select('id, code, name, service_day, monthly_fee, contract_start, contract_end')
+        .eq('module', module)
+        .eq('contract_status', 'active');
+      if (error) throw new Error(error.message);
+
+      return (data ?? [])
+        .filter(s => isEligibleForPeriod(s, period))
+        .map((s: { id: string; code: string; name: string; service_day: number | null; monthly_fee: string }) => ({
+          site_id: s.id, site_code: s.code, site_name: s.name, service_day: s.service_day, monthly_fee: s.monthly_fee,
+        }));
     },
   });
 }
@@ -166,6 +208,8 @@ export interface CreateSiteInput {
   monthlyFee: number;
   /** Bilancosunun aktif olacagi ilk ay: 'YYYY-MM-01' */
   startPeriod: string;
+  /** Isteğe bağlı; siteye özel not/açıklama */
+  notes?: string | null;
 }
 
 /**
@@ -187,6 +231,7 @@ export function useCreateSite() {
           name: input.name.trim(),
           monthly_fee: input.monthlyFee,
           contract_start: input.startPeriod,
+          notes: input.notes?.trim() || null,
         })
         .select('id, module, name')
         .single();
@@ -224,9 +269,10 @@ export interface SiteRecord {
   contract_status: 'active' | 'passive';
   is_active: boolean;
   contract_start: string | null;
+  notes: string | null;
 }
 
-/** Duzenleme formunun GUNCEL adi/ucreti/durumu/baslangic ayini sites tablosundan taze okumasi icin */
+/** Duzenleme formunun GUNCEL adi/ucreti/durumu/baslangic ayini/notunu sites tablosundan taze okumasi icin */
 export function useSite(siteId: string | undefined) {
   return useQuery({
     queryKey: ['site', siteId],
@@ -234,7 +280,7 @@ export function useSite(siteId: string | undefined) {
     queryFn: async (): Promise<SiteRecord> => {
       const { data, error } = await supabase
         .from('sites')
-        .select('id, module, name, monthly_fee, contract_status, is_active, contract_start')
+        .select('id, module, name, monthly_fee, contract_status, is_active, contract_start, notes')
         .eq('id', siteId as string)
         .single();
       if (error) throw new Error(error.message);
@@ -344,6 +390,8 @@ export interface UpdateSiteDetailsInput {
   previousFee: number;
   /** Zam SADECE bu donem ve sonrasini etkiler; gecmis aylar hic dokunulmaz */
   effectivePeriod: string;
+  notes: string | null;
+  previousNotes: string | null;
 }
 
 /**
@@ -375,6 +423,14 @@ export function useUpdateSiteDetails() {
           p_new_fee: input.newFee,
           p_effective_period: input.effectivePeriod,
         });
+        if (error) throw new Error(translateDbError(error.message));
+      }
+
+      if (input.notes !== input.previousNotes) {
+        const { error } = await supabase
+          .from('sites')
+          .update({ notes: input.notes })
+          .eq('id', input.siteId);
         if (error) throw new Error(translateDbError(error.message));
       }
 

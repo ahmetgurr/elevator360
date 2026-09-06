@@ -2,23 +2,24 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { useLedger, usePeriodSummary, useProjectedSummary } from '@/lib/api';
-import { useTheme } from '@/lib/theme';
+import { useLedger, usePeriodSummary, useProjectedSites, useProjectedSummary, type ProjectedSite } from '@/lib/api';
+import { ModuleThemeProvider, useTheme } from '@/lib/theme';
 import { currentPeriod, isFuturePeriod, periodFileLabel, periodLabel } from '@/lib/format';
 import { exportLedgerCsv } from '@/lib/export';
 import {
-  MODULE_FILE_LABEL, MODULE_LABEL, QUICK_FILTERS, matchesQuickFilter,
-  type LedgerRow, type ModuleType, type QuickFilterKey,
+  MODULE_FILE_LABEL, MODULE_LABEL, QUICK_FILTERS, SORT_OPTIONS, matchesQuickFilter, sortLedgerRows,
+  type LedgerRow, type ModuleType, type QuickFilterKey, type SortKey,
 } from '@/lib/types';
 import { ConfirmModal, EmptyState, ErrorState, Loading, Toast, Txt } from '@/components/ui';
-import { LedgerListItem, ProjectedSummaryCard, SummaryStrip } from '@/components/ledger';
+import { LedgerListItem, ProjectedSiteListItem, ProjectedSummaryCard, SummaryStrip } from '@/components/ledger';
 import { FilterDropdown, PeriodSwitcher, SearchBar } from '@/components/pickers';
 import { QuickEntryModal } from '@/components/QuickEntryModal';
 import { AddSiteModal } from '@/components/AddSiteModal';
+import { EditSiteModal } from '@/components/EditSiteModal';
 
-export default function LedgerListScreen() {
-  const { module: raw } = useLocalSearchParams<{ module: string }>();
-  const module = raw as ModuleType;
+type ListItem = LedgerRow | ProjectedSite;
+
+function LedgerListScreenInner({ module }: { module: ModuleType }) {
   const { modules, profile } = useAuth();
   const { c, spacing, radius } = useTheme();
   const navigation = useNavigation();
@@ -26,8 +27,10 @@ export default function LedgerListScreen() {
 
   const [period, setPeriod] = useState(currentPeriod());
   const [filter, setFilter] = useState<QuickFilterKey>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('recent');
   const [search, setSearch] = useState('');
   const [selectedRow, setSelectedRow] = useState<LedgerRow | null>(null);
+  const [selectedProjectedSiteId, setSelectedProjectedSiteId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ visible: boolean; message: string; variant: 'success' | 'error' }>(
     { visible: false, message: '', variant: 'success' }
   );
@@ -38,8 +41,11 @@ export default function LedgerListScreen() {
   const ledger = useLedger(module, period);
   const summary = usePeriodSummary(module, period);
   const future = isFuturePeriod(period);
-  const projected = useProjectedSummary(module, period, future);
+  const projectedSummary = useProjectedSummary(module, period, future);
+  const projectedSites = useProjectedSites(module, period, future);
   const hasRows = (ledger.data?.length ?? 0) > 0;
+  // Gercek satir yoksa VE donem gelecekteyse: "acilacak" siteleri mock olarak goster
+  const isProjectedMode = future && !hasRows && !ledger.isLoading;
 
   async function handleExport() {
     const data = ledger.data ?? [];
@@ -65,6 +71,8 @@ export default function LedgerListScreen() {
   useEffect(() => {
     navigation.setOptions({
       title: MODULE_LABEL[module] ?? 'Aylık Takip',
+      headerStyle: { backgroundColor: c.headerBg },
+      headerTintColor: c.headerText,
       headerRight: () => (
         <Pressable
           onPress={() => setExportConfirmOpen(true)}
@@ -85,7 +93,7 @@ export default function LedgerListScreen() {
       ),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, module, exporting, hasRows, c.accent, c.accentSoft, radius.pill]);
+  }, [navigation, module, exporting, hasRows, c.accent, c.accentSoft, c.headerBg, c.headerText, radius.pill]);
 
   // Filtre secenegi basina kayit sayisi (dropdown'da gosterilir)
   // NOT: 'all' icin de matchesQuickFilter cagrilir — artik "Tumu" pasif
@@ -103,12 +111,24 @@ export default function LedgerListScreen() {
     const data = ledger.data ?? [];
     const byFilter = data.filter(r => matchesQuickFilter(r, filter));
     const q = search.trim().toLocaleLowerCase('tr-TR');
-    if (!q) return byFilter;
-    return byFilter.filter(r =>
+    const bySearch = !q ? byFilter : byFilter.filter(r =>
       r.site_name.toLocaleLowerCase('tr-TR').includes(q) ||
       r.site_code.toLocaleLowerCase('tr-TR').includes(q)
     );
-  }, [ledger.data, filter, search]);
+    return sortLedgerRows(bySearch, sortKey);
+  }, [ledger.data, filter, search, sortKey]);
+
+  const projectedRows = useMemo(() => {
+    const data = projectedSites.data ?? [];
+    const q = search.trim().toLocaleLowerCase('tr-TR');
+    if (!q) return data;
+    return data.filter(s =>
+      s.site_name.toLocaleLowerCase('tr-TR').includes(q) ||
+      s.site_code.toLocaleLowerCase('tr-TR').includes(q)
+    );
+  }, [projectedSites.data, search]);
+
+  const listData: ListItem[] = isProjectedMode ? projectedRows : rows;
 
   if (!module || (modules.length > 0 && !modules.includes(module))) {
     return (
@@ -125,9 +145,9 @@ export default function LedgerListScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <FlatList
-        data={rows}
-        keyExtractor={r => r.ledger_id}
+      <FlatList<ListItem>
+        data={listData}
+        keyExtractor={item => 'ledger_id' in item ? item.ledger_id : item.site_id}
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md }}
         refreshControl={
           <RefreshControl
@@ -143,20 +163,36 @@ export default function LedgerListScreen() {
               <SummaryStrip summary={summary.data} />
             ) : future ? (
               <ProjectedSummaryCard
-                siteCount={projected.data?.site_count ?? 0}
-                totalExpected={projected.data?.total_expected ?? 0}
+                siteCount={projectedSummary.data?.site_count ?? 0}
+                totalExpected={projectedSummary.data?.total_expected ?? 0}
               />
             ) : null}
             <SearchBar value={search} onChange={setSearch} />
+            {isProjectedMode && (
+              <Txt variant="tiny" color={c.textFaint}>
+                Öngörülen siteler için durum filtresi/sıralama uygulanmaz; sadece arama yapabilirsiniz.
+              </Txt>
+            )}
             <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' }}>
-              <View style={{ flex: 1 }}>
-                <FilterDropdown
-                  value={filter}
-                  options={QUICK_FILTERS}
-                  onChange={setFilter}
-                  counts={counts as any}
-                />
-              </View>
+              {!isProjectedMode && (
+                <>
+                  <View style={{ flex: 1 }}>
+                    <FilterDropdown
+                      value={filter}
+                      options={QUICK_FILTERS}
+                      onChange={setFilter}
+                      counts={counts as any}
+                    />
+                  </View>
+                  <FilterDropdown
+                    value={sortKey}
+                    options={SORT_OPTIONS}
+                    onChange={setSortKey}
+                    compact={{ icon: '⇅', label: 'Sırala' }}
+                    title="Sırala"
+                  />
+                </>
+              )}
               {canManageSites && (
                 <Pressable
                   onPress={() => setAddSiteOpen(true)}
@@ -166,6 +202,7 @@ export default function LedgerListScreen() {
                     backgroundColor: c.accentSoft,
                     borderRadius: radius.md,
                     opacity: pressed ? 0.7 : 1,
+                    marginLeft: isProjectedMode ? 'auto' : 0,
                   })}
                 >
                   <Txt variant="h3" color={c.accent} style={{ fontWeight: '700' }}>+ Ekle</Txt>
@@ -175,26 +212,30 @@ export default function LedgerListScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <LedgerListItem row={item} onPress={setSelectedRow} />
+          'ledger_id' in item
+            ? <LedgerListItem row={item} onPress={setSelectedRow} />
+            : <ProjectedSiteListItem site={item} onPress={s => setSelectedProjectedSiteId(s.site_id)} />
         )}
         ListEmptyComponent={
-          ledger.isLoading
+          ledger.isLoading || (future && projectedSites.isLoading)
             ? <Loading label="Liste hazırlanıyor…" />
             : <EmptyState
-                title={search.trim() ? 'Aramayla eşleşen site yok' : filter === 'all' ? 'Bu dönemde kayıt yok' : 'Bu filtreye uyan kayıt yok'}
+                title={search.trim() ? 'Aramayla eşleşen site yok' : isProjectedMode ? 'Bu dönem için öngörülen site yok' : filter === 'all' ? 'Bu dönemde kayıt yok' : 'Bu filtreye uyan kayıt yok'}
                 detail={search.trim()
                   ? 'Farklı bir isim veya kod ile tekrar deneyin.'
-                  : filter === 'all'
-                    ? (future
-                        ? 'Bu ay henüz gelmedi; gerçek borç/tahsilat kayıtları o ay geldiğinde otomatik açılır. Yukarıdaki öngörü tahminidir.'
-                        : 'Aktif sitelerin bu ayki satırları otomatik açılır. Site tanımlıysa listede görünmeli.')
-                    : 'Farklı bir durum seçerek listeyi genişletebilirsiniz.'}
+                  : isProjectedMode
+                    ? 'Bu dönemde aktif/uygun site bulunmuyor.'
+                    : filter === 'all'
+                      ? 'Aktif sitelerin bu ayki satırları otomatik açılır. Site tanımlıysa listede görünmeli.'
+                      : 'Farklı bir durum seçerek listeyi genişletebilirsiniz.'}
               />
         }
         ListFooterComponent={
-          rows.length > 0 ? (
+          listData.length > 0 ? (
             <Txt variant="tiny" color={c.textFaint} style={{ textAlign: 'center', marginTop: spacing.md }}>
-              {rows.length} kayıt · en son işlem gören üstte
+              {isProjectedMode
+                ? `${listData.length} öngörülen site`
+                : `${listData.length} kayıt · en son işlem gören üstte`}
             </Txt>
           ) : null
         }
@@ -214,6 +255,18 @@ export default function LedgerListScreen() {
           setToast({ visible: true, variant: 'success', message });
         }}
         onNavigateToPeriod={handleNavigateToPeriod}
+      />
+
+      <EditSiteModal
+        visible={!!selectedProjectedSiteId}
+        siteId={selectedProjectedSiteId ?? undefined}
+        module={module}
+        period={period}
+        onClose={() => setSelectedProjectedSiteId(null)}
+        onSuccess={message => {
+          setSelectedProjectedSiteId(null);
+          setToast({ visible: true, variant: 'success', message });
+        }}
       />
 
       <AddSiteModal
@@ -242,5 +295,15 @@ export default function LedgerListScreen() {
         onHide={() => setToast(t => ({ ...t, visible: false }))}
       />
     </View>
+  );
+}
+
+export default function LedgerListScreen() {
+  const { module: raw } = useLocalSearchParams<{ module: string }>();
+  const module = raw as ModuleType;
+  return (
+    <ModuleThemeProvider module={module}>
+      <LedgerListScreenInner module={module} />
+    </ModuleThemeProvider>
   );
 }

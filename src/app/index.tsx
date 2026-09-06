@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { usePeriodSummary, useProjectedSummary } from '@/lib/api';
-import { useTheme } from '@/lib/theme';
+import { moduleAccent, useTheme } from '@/lib/theme';
 import { currentPeriod, isFuturePeriod } from '@/lib/format';
 import { MODULE_LABEL, type ModuleType } from '@/lib/types';
 import { Button, EmptyState, Txt } from '@/components/ui';
@@ -16,7 +16,7 @@ const MODULE_DESC: Record<ModuleType, string> = {
 
 export default function ModulePickerScreen() {
   const { profile, modules, signOut } = useAuth();
-  const { c, spacing, radius } = useTheme();
+  const { c, dark, spacing, radius } = useTheme();
   const router = useRouter();
   const navigation = useNavigation();
   const autoNavigated = useRef(false);
@@ -80,21 +80,24 @@ export default function ModulePickerScreen() {
           detail="Sistem yöneticisinin hesabınıza asansör ve/veya temizlik modülü yetkisi tanımlaması gerekiyor."
         />
       ) : (
-        modules.map(m => (
-          <Pressable
-            key={m}
-            onPress={() => router.push(`/${m}`)}
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? c.surfaceAlt : c.surface,
-              borderRadius: radius.lg, padding: spacing.xl, gap: spacing.sm,
-              borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
-              borderLeftWidth: 4, borderLeftColor: c.accent,
-            })}
-          >
-            <Txt variant="h2">{MODULE_LABEL[m]}</Txt>
-            <Txt variant="small" color={c.textMuted}>{MODULE_DESC[m]}</Txt>
-          </Pressable>
-        ))
+        modules.map(m => {
+          const accent = dark ? moduleAccent[m].dark : moduleAccent[m].light;
+          return (
+            <Pressable
+              key={m}
+              onPress={() => router.push(`/${m}`)}
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? c.surfaceAlt : c.surface,
+                borderRadius: radius.lg, padding: spacing.xl, gap: spacing.sm,
+                borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
+                borderLeftWidth: 4, borderLeftColor: accent,
+              })}
+            >
+              <Txt variant="h2">{MODULE_LABEL[m]}</Txt>
+              <Txt variant="small" color={c.textMuted}>{MODULE_DESC[m]}</Txt>
+            </Pressable>
+          );
+        })
       )}
 
       {modules.length > 0 && (

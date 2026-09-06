@@ -1,9 +1,13 @@
 /**
  * Elevator360 tasarim sistemi.
- * Koyu lacivert + altin kimlik. Tum renkler token uzerinden kullanilir;
- * bilesenlerde ham hex yazilmaz.
+ * Koyu lacivert + altin kimlik (Asansör). Temizlik modulu, kullanicinin
+ * yanlis module veri girmesini engellemek icin AYRI bir vurgu renginde
+ * (soft teal/yesil) calisir — bkz. ModuleThemeProvider. Tum renkler token
+ * uzerinden kullanilir; bilesenlerde ham hex yazilmaz.
  */
+import React, { createContext, useContext } from 'react';
 import { useColorScheme } from 'react-native';
+import type { ModuleType } from './types';
 
 const palette = {
   navy900: '#0B1526',
@@ -17,6 +21,13 @@ const palette = {
   gold500: '#C9A227',
   gold400: '#DCBB55',
   gold100: '#F7EFD6',
+
+  teal700: '#0D6B60',
+  teal600: '#0F9488',
+  teal400: '#2DD4BF',
+  teal100: '#CCFBF1',
+  tealHeaderLight: '#0B3B36',
+  tealHeaderDark: '#0F2E2A',
 
   white: '#FFFFFF',
   slate500: '#64748B',
@@ -94,6 +105,35 @@ const dark: Colors = {
   infoSoft: 'rgba(29,78,216,0.25)',
 };
 
+/**
+ * Temizlik modulu icin lacivert-altin'in teal (soft yesil) karsiligi.
+ * SADECE accent/accentSoft/onAccent/headerBg degisir — geri kalan tum
+ * yapisal token'lar (bg/surface/border/danger/ok vb.) AYNI kalir ki
+ * "temizlik hissi" bir marka vurgusu olarak eklensin, ayri bir tema
+ * sistemi olusturmasin.
+ */
+const lightCleaning: Colors = {
+  ...light,
+  headerBg: palette.tealHeaderLight,
+  accent: palette.teal600,
+  accentSoft: palette.teal100,
+  onAccent: palette.white,
+};
+
+const darkCleaning: Colors = {
+  ...dark,
+  headerBg: palette.tealHeaderDark,
+  accent: palette.teal400,
+  accentSoft: 'rgba(45,212,191,0.18)',
+  onAccent: palette.teal700,
+};
+
+/** Modul secim ekrani gibi tek bir modulle sinirli olmayan yerlerde kart/rozet vurgusu icin */
+export const moduleAccent: Record<ModuleType, { light: string; dark: string; lightSoft: string; darkSoft: string }> = {
+  elevator: { light: light.accent, dark: dark.accent, lightSoft: light.accentSoft, darkSoft: dark.accentSoft },
+  cleaning: { light: lightCleaning.accent, dark: darkCleaning.accent, lightSoft: lightCleaning.accentSoft, darkSoft: darkCleaning.accentSoft },
+};
+
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 export const radius = { sm: 6, md: 10, lg: 14, pill: 999 } as const;
 
@@ -110,10 +150,28 @@ export const font = {
   moneyMd: { fontSize: 20, fontWeight: '700' as const, fontVariant: ['tabular-nums'] as const },
 };
 
-export function useTheme() {
+/**
+ * Bir ekran agacinin hangi modulun renklerini kullanacagini belirler.
+ * [module]/index.tsx kendi altindaki her seyi (QuickEntryModal,
+ * EditSiteModal, AddSiteModal, liste kartlari...) bu Provider ile sarar;
+ * icerideki tum useTheme() cagrilari HICBIR PROP GECMEDEN dogru rengi
+ * otomatik alir. Modul secimi disindaki ekranlar (login, modul secim
+ * ekrani) sarilmadigi icin varsayilan lacivert-altin'da kalir.
+ */
+const ModuleThemeContext = createContext<ModuleType | null>(null);
+
+export function ModuleThemeProvider({ module, children }: { module: ModuleType; children: React.ReactNode }) {
+  return React.createElement(ModuleThemeContext.Provider, { value: module }, children);
+}
+
+/** `module` verilirse context'i ezer — ekranin kendisi Provider'i sarmadan ONCE kendi rengini bilmek icin kullanir */
+export function useTheme(module?: ModuleType) {
   const scheme = useColorScheme();
-  const c = scheme === 'dark' ? dark : light;
-  return { c, dark: scheme === 'dark', spacing, radius, font };
+  const ctxModule = useContext(ModuleThemeContext);
+  const activeModule = module ?? ctxModule;
+  const isDark = scheme === 'dark';
+  const c = activeModule === 'cleaning' ? (isDark ? darkCleaning : lightCleaning) : (isDark ? dark : light);
+  return { c, dark: isDark, spacing, radius, font };
 }
 
 /** Bilanco durumlarinin renk esleri (v_ledger.status_key ile birebir) */

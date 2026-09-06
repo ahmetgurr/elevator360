@@ -38,6 +38,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
 
   const [name, setName] = useState('');
   const [feeText, setFeeText] = useState('');
+  const [notesText, setNotesText] = useState('');
   const [nameError, setNameError] = useState('');
   const [feeError, setFeeError] = useState('');
   const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false);
@@ -53,6 +54,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
     if (visible && site.data) {
       setName(site.data.name);
       setFeeText(String(num(site.data.monthly_fee)));
+      setNotesText(site.data.notes ?? '');
       setStartPeriodValue(site.data.contract_start ?? currentPeriod());
       setNameError('');
       setFeeError('');
@@ -93,14 +95,19 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
 
     const previousName = site.data.name;
     const previousFee = num(site.data.monthly_fee);
+    const previousNotes = site.data.notes;
+    const trimmedNotes = notesText.trim() || null;
 
-    if (trimmedName === previousName && newFee === previousFee) {
+    if (trimmedName === previousName && newFee === previousFee && trimmedNotes === previousNotes) {
       onClose();
       return;
     }
 
     mutation.mutate(
-      { siteId: site.data.id, module, name: trimmedName, previousName, newFee, previousFee, effectivePeriod: period },
+      {
+        siteId: site.data.id, module, name: trimmedName, previousName, newFee, previousFee,
+        effectivePeriod: period, notes: trimmedNotes, previousNotes,
+      },
       { onSuccess: () => onSuccess(`${trimmedName} güncellendi.`) },
     );
   }
@@ -203,6 +210,16 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                     onChangeText={setFeeText}
                     error={feeError}
                     hint={`Bu ücret ${periodLabel(period)} ve sonraki aylara uygulanır; geçmiş ayların bilançosu değişmez.`}
+                  />
+
+                  <Field
+                    label="Not / Yorum (opsiyonel)"
+                    placeholder="Bu siteye dair özel bir durum varsa buraya yazın"
+                    value={notesText}
+                    onChangeText={setNotesText}
+                    multiline
+                    numberOfLines={3}
+                    style={{ minHeight: 76, textAlignVertical: 'top' }}
                   />
 
                   {mutation.isError && (

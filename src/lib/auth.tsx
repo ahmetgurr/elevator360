@@ -53,7 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .single()
       .then(({ data, error }) => {
         if (!alive) return;
-        if (error) console.warn('Profil okunamadi:', error.message);
+        // __DEV__: sadece gelistirme derlemesinde loglanir, production'a sizmaz.
+        if (error && __DEV__) console.warn('Profil okunamadi:', error.message);
         setProfile((data as Profile) ?? null);
         setLoading(false);
       });

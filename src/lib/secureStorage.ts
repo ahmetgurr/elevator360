@@ -46,7 +46,19 @@ class LargeSecureStore {
   async getItem(key: string): Promise<string | null> {
     const encrypted = await AsyncStorage.getItem(key);
     if (!encrypted) return null;
-    return this.decrypt(key, encrypted);
+    try {
+      return await this.decrypt(key, encrypted);
+    } catch {
+      // Sifreli veri ile anahtar birbiriyle uyusmuyor (ornegin uygulama
+      // yeniden yuklenirken yarim kalmis bir yazma, ya da eski bir formattan
+      // kalma bozuk kayit). Supabase bunu "oturum yok" olarak yorumlayip
+      // sessizce yeniden girise yonlendirsin — kullaniciyi CRASH'e
+      // dusurmek yerine (bkz. kullanici geri bildirimi: tekrar tekrar
+      // giris/kilitlenme yasanmamali). Bozuk kaydi da temizleyelim ki
+      // bir sonraki denemede ayni hata tekrarlanmasin.
+      await this.removeItem(key);
+      return null;
+    }
   }
 
   async setItem(key: string, value: string): Promise<void> {

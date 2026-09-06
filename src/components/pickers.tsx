@@ -29,6 +29,7 @@ export function SearchBar({ value, onChange, placeholder = 'Site adı ara…' }:
         autoCorrect={false}
         autoCapitalize="none"
         returnKeyType="search"
+        maxLength={100}
         style={[font.body, { flex: 1, color: c.text, paddingVertical: spacing.md }]}
       />
       {value.length > 0 && (

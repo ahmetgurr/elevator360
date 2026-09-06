@@ -2,9 +2,12 @@ import React, { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
+import { usePeriodSummary } from '@/lib/api';
 import { useTheme } from '@/lib/theme';
+import { currentPeriod } from '@/lib/format';
 import { MODULE_LABEL, type ModuleType } from '@/lib/types';
 import { Button, EmptyState, Txt } from '@/components/ui';
+import { CashSummaryPanel } from '@/components/ledger';
 
 const MODULE_DESC: Record<ModuleType, string> = {
   elevator: 'Periyodik bakım, arıza, parça değişimi ve aylık tahsilat takibi',
@@ -17,6 +20,9 @@ export default function ModulePickerScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const autoNavigated = useRef(false);
+  const period = currentPeriod();
+  const elevatorSummary = usePeriodSummary('elevator', period, modules.includes('elevator'));
+  const cleaningSummary = usePeriodSummary('cleaning', period, modules.includes('cleaning'));
 
   // Tek modul yetkisi varsa secim ekraninda oyalanma, dogrudan listeye gec.
   // push kullanilir (replace degil): boylece bu ekran yiginda kalir ve
@@ -46,6 +52,13 @@ export default function ModulePickerScreen() {
         <Txt variant="h1">Merhaba{profile?.full_name ? `, ${profile.full_name}` : ''}</Txt>
         <Txt variant="small" color={c.textMuted}>Çalışmak istediğiniz modülü seçin.</Txt>
       </View>
+
+      {modules.length > 0 && (
+        <CashSummaryPanel
+          summaries={[elevatorSummary.data, cleaningSummary.data]}
+          loading={elevatorSummary.isLoading || cleaningSummary.isLoading}
+        />
+      )}
 
       {modules.length === 0 ? (
         <EmptyState

@@ -42,10 +42,15 @@ export function useLedger(module: ModuleType, period: string) {
   });
 }
 
-export function usePeriodSummary(module: ModuleType, period: string) {
+export function usePeriodSummary(module: ModuleType, period: string, enabled = true) {
   return useQuery({
     queryKey: ['summary', module, period],
+    enabled,
     queryFn: async (): Promise<PeriodSummary | null> => {
+      // Home ekranindaki "Patron Ozeti" da bu hook'u kullanir; kullanici
+      // henuz o modulun liste ekranina girmemis olabilir, bu yuzden ay
+      // otomasyonu burada da tetiklenir (idempotent, ucuz).
+      await ensureCurrentPeriod(module);
       const { data, error } = await supabase
         .from('v_period_summary')
         .select('*')
@@ -163,6 +168,89 @@ export function useCreateSite() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['ledger', vars.module] });
       qc.invalidateQueries({ queryKey: ['summary', vars.module] });
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Site duzenleme / zam                                                */
+/* ------------------------------------------------------------------ */
+
+export interface SiteRecord {
+  id: string;
+  module: ModuleType;
+  name: string;
+  monthly_fee: string;
+}
+
+/** Duzenleme formunun GUNCEL adi/ucreti sites tablosundan taze okumasi icin */
+export function useSite(siteId: string | undefined) {
+  return useQuery({
+    queryKey: ['site', siteId],
+    enabled: !!siteId,
+    queryFn: async (): Promise<SiteRecord> => {
+      const { data, error } = await supabase
+        .from('sites')
+        .select('id, module, name, monthly_fee')
+        .eq('id', siteId as string)
+        .single();
+      if (error) throw new Error(error.message);
+      return data as SiteRecord;
+    },
+  });
+}
+
+export interface UpdateSiteDetailsInput {
+  siteId: string;
+  module: ModuleType;
+  name: string;
+  previousName: string;
+  newFee: number;
+  previousFee: number;
+  /** Zam SADECE bu donem ve sonrasini etkiler; gecmis aylar hic dokunulmaz */
+  effectivePeriod: string;
+}
+
+/**
+ * Site adini ve/veya aylik ucretini gunceller. Ucret degisikligi
+ * set_site_fee() RPC'sine devredilir (0002_functions.sql /
+ * 0006_period_automation.sql) — bu fonksiyon sites.monthly_fee'yi
+ * gunceller VE yalnizca effectivePeriod ve SONRASINDAKI, kilitli
+ * OLMAYAN monthly_ledger satirlarinin base_fee'sini yeniden yazar.
+ * Gecmis aylarin bilancosu ASLA degismez (esnafin eski Excel hatasi
+ * tam olarak buydu — bkz. set_site_fee yorum bloğu).
+ */
+export function useUpdateSiteDetails() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateSiteDetailsInput) => {
+      const trimmedName = input.name.trim();
+
+      if (trimmedName !== input.previousName) {
+        const { error } = await supabase
+          .from('sites')
+          .update({ name: trimmedName })
+          .eq('id', input.siteId);
+        if (error) throw new Error(translateDbError(error.message));
+      }
+
+      if (input.newFee !== input.previousFee) {
+        const { error } = await supabase.rpc('set_site_fee', {
+          p_site_id: input.siteId,
+          p_new_fee: input.newFee,
+          p_effective_period: input.effectivePeriod,
+        });
+        if (error) throw new Error(translateDbError(error.message));
+      }
+
+      return { name: trimmedName };
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['ledger', vars.module] });
+      qc.invalidateQueries({ queryKey: ['summary', vars.module] });
+      qc.invalidateQueries({ queryKey: ['site-history', vars.siteId, vars.module] });
+      qc.invalidateQueries({ queryKey: ['carried-over', vars.siteId, vars.module] });
+      qc.invalidateQueries({ queryKey: ['site', vars.siteId] });
     },
   });
 }

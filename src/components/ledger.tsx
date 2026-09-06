@@ -146,3 +146,75 @@ function Stat({ label, value, color }: { label: string; value: string; color: st
     </View>
   );
 }
+
+/* --------------------------- Patron / kasa ozeti ------------------------- */
+
+/**
+ * "Bu ay piyasadan toplam ne kadar alacagim var, ne kadari nakit,
+ * kalan ne" — esnafin ana ekrana girer girmez tek bakista gormesi
+ * gereken 3 metrik. Birden fazla modulun ozetini (site listesi
+ * sayfasindaki SummaryStrip'ten farkli olarak) TOPLU gosterebilir.
+ */
+export function CashSummaryPanel({ summaries, loading }: {
+  summaries: (PeriodSummary | null | undefined)[];
+  loading?: boolean;
+}) {
+  const { c, spacing, radius } = useTheme();
+
+  const totals = summaries.reduce(
+    (acc, s) => {
+      if (!s) return acc;
+      acc.expected += num(s.total_expected);
+      acc.collected += num(s.total_collected);
+      acc.balance += num(s.total_balance);
+      return acc;
+    },
+    { expected: 0, collected: 0, balance: 0 },
+  );
+  const rate = totals.expected > 0 ? Math.round((totals.collected / totals.expected) * 100) : 0;
+
+  return (
+    <View style={{
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.xl, gap: spacing.lg,
+      borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
+      borderTopWidth: 4, borderTopColor: c.accent,
+    }}>
+      <Txt variant="h3" color={c.textMuted}>Bu Ayın Genel Kasa Özeti</Txt>
+
+      {loading ? (
+        <Txt variant="small" color={c.textFaint}>Hesaplanıyor…</Txt>
+      ) : (
+        <>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <BigStat label="Toplam Beklenen" value={totals.expected} color={c.text} />
+            <BigStat label="Tahsil Edilen" value={totals.collected} color={c.ok} />
+            <BigStat label="Kalan Alacak" value={totals.balance} color={c.danger} />
+          </View>
+
+          <View style={{ gap: spacing.xs }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Txt variant="tiny" color={c.textFaint}>Tahsilat oranı</Txt>
+              <Txt variant="tiny" color={c.textMuted}>%{rate}</Txt>
+            </View>
+            <View style={{ height: 6, backgroundColor: c.surfaceAlt, borderRadius: radius.pill, overflow: 'hidden' }}>
+              <View style={{
+                width: `${Math.min(100, Math.max(0, rate))}%`, height: '100%',
+                backgroundColor: rate >= 80 ? c.ok : rate >= 40 ? c.accent : c.danger,
+              }} />
+            </View>
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
+function BigStat({ label, value, color }: { label: string; value: number; color: string }) {
+  const { c } = useTheme();
+  return (
+    <View style={{ gap: 2, flex: 1 }}>
+      <Txt variant="small" color={c.textFaint}>{label}</Txt>
+      <Txt variant="h2" color={color} numberOfLines={1}>{money(value)}</Txt>
+    </View>
+  );
+}

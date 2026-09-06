@@ -8,6 +8,7 @@ import { useCarriedOverBalance, usePostTransaction, useSiteHistory, useUpdateNot
 import { money, num, parseAmount, periodLabel } from '@/lib/format';
 import type { LedgerRow, ModuleType } from '@/lib/types';
 import { StatusPill } from './ledger';
+import { EditSiteModal } from './EditSiteModal';
 import { Button, ConfirmModal, Field, Txt } from './ui';
 
 /** Cift dokunma kalkani: modal her acildiginda benzersiz bir istek kimligi uretilir */
@@ -22,12 +23,16 @@ interface NoteItem {
   isLocked: boolean;
 }
 
-export function QuickEntryModal({ row, module, period, onClose, onSuccess, onNavigateToPeriod }: {
+export function QuickEntryModal({ row, module, period, canEdit, onClose, onSuccess, onSiteUpdated, onNavigateToPeriod }: {
   row: LedgerRow | null;
   module: ModuleType;
   period: string;
+  /** Site adi / ucret duzenleme butonunu gosterip gostermeyecegi (admin/operator) */
+  canEdit: boolean;
   onClose: () => void;
   onSuccess: (row: LedgerRow) => void;
+  /** Site bilgisi (ad/ucret) basariyla guncellendiginde tetiklenir */
+  onSiteUpdated: (name: string) => void;
   /** "Ödeme Geçmişi" kartından tıklanınca o ayın tablosuna ve site detayına geçilir */
   onNavigateToPeriod: (period: string, row: LedgerRow) => void;
 }) {
@@ -44,6 +49,7 @@ export function QuickEntryModal({ row, module, period, onClose, onSuccess, onNav
   const [currentNotes, setCurrentNotes] = useState<string | null>(null);
   const [requestId, setRequestId] = useState(makeRequestId);
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
+  const [editSiteOpen, setEditSiteOpen] = useState(false);
 
   // Modal yeni bir satir icin acildiginda alanlar ve istek kimligi sifirlanir
   useEffect(() => {
@@ -75,6 +81,12 @@ export function QuickEntryModal({ row, module, period, onClose, onSuccess, onNav
 
   function handleClose() {
     if (mutation.isPending) return;
+    onClose();
+  }
+
+  function handleSiteUpdated(name: string) {
+    setEditSiteOpen(false);
+    onSiteUpdated(name);
     onClose();
   }
 
@@ -116,11 +128,26 @@ export function QuickEntryModal({ row, module, period, onClose, onSuccess, onNav
             style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '88%' }}
           >
             <View style={{
-              padding: spacing.lg, gap: 2,
+              padding: spacing.lg,
               borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+              flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm,
             }}>
-              <Txt variant="h3">Hızlı Kayıt</Txt>
-              <Txt variant="small" color={c.textMuted} numberOfLines={1}>{row.site_name}</Txt>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt variant="h3">Hızlı Kayıt</Txt>
+                <Txt variant="small" color={c.textMuted} numberOfLines={1}>{row.site_name}</Txt>
+              </View>
+              {canEdit && (
+                <Pressable
+                  onPress={() => setEditSiteOpen(true)}
+                  hitSlop={8}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
+                    borderRadius: radius.sm, backgroundColor: pressed ? c.surfaceAlt : 'transparent',
+                  })}
+                >
+                  <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>✎ Düzenle</Txt>
+                </Pressable>
+              )}
             </View>
 
             <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
@@ -240,6 +267,15 @@ export function QuickEntryModal({ row, module, period, onClose, onSuccess, onNav
         }}
         updateNote={updateNote}
         siteId={row.site_id}
+      />
+
+      <EditSiteModal
+        visible={editSiteOpen}
+        siteId={row.site_id}
+        module={module}
+        period={period}
+        onClose={() => setEditSiteOpen(false)}
+        onSuccess={handleSiteUpdated}
       />
     </Modal>
   );

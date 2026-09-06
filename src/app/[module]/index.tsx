@@ -22,7 +22,7 @@ export default function LedgerListScreen() {
   const { modules, profile } = useAuth();
   const { c, spacing, radius } = useTheme();
   const navigation = useNavigation();
-  const canAddSite = profile?.role === 'admin' || profile?.role === 'operator';
+  const canManageSites = profile?.role === 'admin' || profile?.role === 'operator';
 
   const [period, setPeriod] = useState(currentPeriod());
   const [filter, setFilter] = useState<QuickFilterKey>('all');
@@ -146,7 +146,7 @@ export default function LedgerListScreen() {
                   counts={counts as any}
                 />
               </View>
-              {canAddSite && (
+              {canManageSites && (
                 <Pressable
                   onPress={() => setAddSiteOpen(true)}
                   style={({ pressed }) => ({
@@ -191,10 +191,14 @@ export default function LedgerListScreen() {
         row={selectedRow}
         module={module}
         period={period}
+        canEdit={canManageSites}
         onClose={() => setSelectedRow(null)}
         onSuccess={row => {
           setSelectedRow(null);
           setToast({ visible: true, variant: 'success', message: `${row.site_name} için işlem başarıyla kaydedildi.` });
+        }}
+        onSiteUpdated={name => {
+          setToast({ visible: true, variant: 'success', message: `${name} güncellendi.` });
         }}
         onNavigateToPeriod={handleNavigateToPeriod}
       />

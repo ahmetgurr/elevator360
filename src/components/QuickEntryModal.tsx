@@ -4,7 +4,7 @@ import {
   ScrollView, StyleSheet, View,
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
-import { useCarriedOverBalance, usePostTransaction, useSiteHistory, useUpdateNote } from '@/lib/api';
+import { usePostTransaction, useSiteHistory, useUpdateNote } from '@/lib/api';
 import { money, num, parseAmount, periodLabel } from '@/lib/format';
 import type { LedgerRow, ModuleType } from '@/lib/types';
 import { StatusPill } from './ledger';
@@ -41,7 +41,6 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   const mutation = usePostTransaction(module, period);
   const updateNote = useUpdateNote(module, period);
   const history = useSiteHistory(row?.site_id, module, period);
-  const carriedOver = useCarriedOverBalance(row?.site_id, module, period);
 
   const [extraText, setExtraText] = useState('');
   const [paymentText, setPaymentText] = useState('');
@@ -66,7 +65,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
 
   if (!row) return null;
 
-  const carriedOverAmount = carriedOver.data ?? 0;
+  const carriedOverAmount = num(row.carried_over_balance);
   const hasCarriedOver = Math.abs(carriedOverAmount) >= 0.01;
 
   const noteItems: NoteItem[] = [];
@@ -170,6 +169,10 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                 <MiniStat label="Bu Ay Ödenen" value={row.net_paid} color={c.ok} />
                 <MiniStat label="Bu Ay Kalan" value={row.balance} color={num(row.balance) > 0 ? c.danger : c.ok} />
               </View>
+
+              <Txt variant="tiny" color={c.textFaint}>
+                Ödeme Günü: {row.service_day ? `Ayın ${row.service_day}'i` : 'Belirtilmemiş'}
+              </Txt>
 
               <Field
                 label="Ekstra Hizmet / Malzeme Çıktı Mı? (₺)"

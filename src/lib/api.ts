@@ -145,40 +145,42 @@ export function useProjectedSites(module: ModuleType, period: string, enabled = 
   });
 }
 
-export interface YearlySummary {
+export interface RangePeriodSummary {
+  period: string;
   total_expected: number;
   total_collected: number;
   total_balance: number;
 }
 
 /**
- * "Tüm Yılı Göster" pop-up'ı için — verilen yılın (Ocak-Aralık) o ana
- * kadar ACILMIŞ tüm donemlerini v_period_summary'den toplar. Yeni bir
- * view/migration gerekmez; mevcut view zaten donem bazinda topluyor,
- * burada sadece yil icindeki donemler client tarafinda toplanir.
+ * "Tarih Aralığı Bilançosu" pop-up'ı için — verilen [startPeriod, endPeriod]
+ * araligindaki (dahil) ACILMIŞ tüm donemleri, HER AY AYRI bir satir olarak
+ * dondurur (en guncelden eskiye). Boylece hem toplam (satirlar client'ta
+ * toplanir) hem ay-ay kirilim TEK sorguda elde edilir. Yeni bir view/
+ * migration gerekmez; mevcut v_period_summary zaten donem bazinda topluyor.
  */
-export function useYearlySummary(module: ModuleType, year: number, enabled = true) {
+export function useRangeSummary(
+  module: ModuleType, startPeriod: string, endPeriod: string, enabled = true
+) {
   return useQuery({
-    queryKey: ['yearly-summary', module, year],
+    queryKey: ['range-summary', module, startPeriod, endPeriod],
     enabled,
-    queryFn: async (): Promise<YearlySummary> => {
+    queryFn: async (): Promise<RangePeriodSummary[]> => {
       const { data, error } = await supabase
         .from('v_period_summary')
-        .select('total_expected, total_collected, total_balance')
+        .select('period, total_expected, total_collected, total_balance')
         .eq('module', module)
-        .gte('period', `${year}-01-01`)
-        .lte('period', `${year}-12-01`);
+        .gte('period', startPeriod)
+        .lte('period', endPeriod)
+        .order('period', { ascending: false });
       if (error) throw new Error(error.message);
 
-      return (data ?? []).reduce(
-        (acc, r: { total_expected: string; total_collected: string; total_balance: string }) => {
-          acc.total_expected += num(r.total_expected);
-          acc.total_collected += num(r.total_collected);
-          acc.total_balance += num(r.total_balance);
-          return acc;
-        },
-        { total_expected: 0, total_collected: 0, total_balance: 0 },
-      );
+      return (data ?? []).map((r: { period: string; total_expected: string; total_collected: string; total_balance: string }) => ({
+        period: r.period,
+        total_expected: num(r.total_expected),
+        total_collected: num(r.total_collected),
+        total_balance: num(r.total_balance),
+      }));
     },
   });
 }
@@ -214,24 +216,6 @@ export function useSiteHistory(
         .order('period', { ascending: false });
       if (error) throw new Error(error.message);
       return (data ?? []) as LedgerRow[];
-    },
-  });
-}
-
-/** Secili donemden ONCEKI tum ayların toplam acik bakiyesi (devir) */
-export function useCarriedOverBalance(siteId: string | undefined, module: ModuleType, period: string) {
-  return useQuery({
-    queryKey: ['carried-over', siteId, module, period],
-    enabled: !!siteId,
-    queryFn: async (): Promise<number> => {
-      const { data, error } = await supabase
-        .from('v_ledger')
-        .select('balance')
-        .eq('site_id', siteId as string)
-        .eq('module', module)
-        .lt('period', period);
-      if (error) throw new Error(error.message);
-      return (data ?? []).reduce((sum, r: { balance: string }) => sum + num(r.balance), 0);
     },
   });
 }
@@ -357,7 +341,6 @@ export function useSetSiteStartPeriod() {
       qc.invalidateQueries({ queryKey: ['ledger', vars.module] });
       qc.invalidateQueries({ queryKey: ['summary', vars.module] });
       qc.invalidateQueries({ queryKey: ['site-history', vars.siteId, vars.module] });
-      qc.invalidateQueries({ queryKey: ['carried-over', vars.siteId, vars.module] });
       qc.invalidateQueries({ queryKey: ['site', vars.siteId] });
     },
   });
@@ -478,7 +461,6 @@ export function useUpdateSiteDetails() {
       qc.invalidateQueries({ queryKey: ['ledger', vars.module] });
       qc.invalidateQueries({ queryKey: ['summary', vars.module] });
       qc.invalidateQueries({ queryKey: ['site-history', vars.siteId, vars.module] });
-      qc.invalidateQueries({ queryKey: ['carried-over', vars.siteId, vars.module] });
       qc.invalidateQueries({ queryKey: ['site', vars.siteId] });
     },
   });
@@ -512,6 +494,41 @@ export function useUpdateNote(module: ModuleType, period: string) {
       qc.invalidateQueries({ queryKey: ['site-history', vars.siteId, module] });
     },
   });
+}
+
+export interface CarriedOverBreakdownEntry {
+  period: string;
+  balance: number;
+}
+
+/**
+ * CSV disa aktarim icin: verilen siteler'in, exportedPeriod'DAN ONCEKI
+ * (acik bakiyesi > 0 olan) her donemini AYRI AYRI dondurur — "06.2026'dan
+ * 4.000₺, 07.2026'dan 2.000₺ borcu bulunmaktadır" gibi bir hatirlatma
+ * metni olusturmak icin. TEK sorguda tum siteler icin cekilir (N+1 yok).
+ * Bir react-query hook'u DEGILDIR — export butonuna basildiginda bir kez
+ * cagrilan imperatif bir yardimcidir.
+ */
+export async function fetchCarriedOverBreakdown(
+  module: ModuleType, exportedPeriod: string, siteIds: string[]
+): Promise<Record<string, CarriedOverBreakdownEntry[]>> {
+  const out: Record<string, CarriedOverBreakdownEntry[]> = {};
+  if (siteIds.length === 0) return out;
+
+  const { data, error } = await supabase
+    .from('v_ledger')
+    .select('site_id, period, balance')
+    .eq('module', module)
+    .lt('period', exportedPeriod)
+    .gt('balance', 0)
+    .in('site_id', siteIds)
+    .order('period', { ascending: true });
+  if (error) throw new Error(error.message);
+
+  for (const r of (data ?? []) as { site_id: string; period: string; balance: string }[]) {
+    (out[r.site_id] ??= []).push({ period: r.period, balance: num(r.balance) });
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ */

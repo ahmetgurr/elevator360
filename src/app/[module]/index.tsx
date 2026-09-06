@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { useLedger, usePeriodSummary, useProjectedSites, useProjectedSummary, type ProjectedSite } from '@/lib/api';
+import {
+  fetchCarriedOverBreakdown, useLedger, usePeriodSummary, useProjectedSites, useProjectedSummary,
+  type ProjectedSite,
+} from '@/lib/api';
 import { ModuleThemeProvider, useTheme } from '@/lib/theme';
 import { currentPeriod, isFuturePeriod, periodFileLabel, periodLabel } from '@/lib/format';
 import { exportLedgerCsv } from '@/lib/export';
@@ -54,8 +57,11 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
     if (exporting || data.length === 0) return;
     setExporting(true);
     try {
+      const carriedOverBreakdown = await fetchCarriedOverBreakdown(module, period, data.map(r => r.site_id));
       const fileName = `${MODULE_FILE_LABEL[module] ?? 'Rapor'}_${periodFileLabel(period)}_Raporu`;
-      await exportLedgerCsv(data, fileName);
+      await exportLedgerCsv(data, fileName, {
+        period, summary: summary.data ?? null, carriedOverBreakdown,
+      });
       setToast({ visible: true, variant: 'success', message: 'CSV raporu hazırlandı.' });
     } catch (err) {
       setToast({ visible: true, variant: 'error', message: 'Dışa aktarma başarısız oldu.' });
@@ -210,7 +216,7 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
                     opacity: pressed ? 0.7 : 1,
                   })}
                 >
-                  <Txt variant="h3" color={c.accent} style={{ fontWeight: '700' }}>+ Ekle</Txt>
+                  <Txt variant="h3" color={c.accent} style={{ fontWeight: '700' }}>+ Site Ekle</Txt>
                 </Pressable>
               )}
             </View>

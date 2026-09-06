@@ -43,6 +43,12 @@ export function periodFileLabel(period: string): string {
   return `${AYLAR_ASCII[m - 1]}_${y}`;
 }
 
+/** '2026-06-01' -> '06.2026' — CSV disa aktarimda kisa/nümerik donem etiketi */
+export function periodShortLabel(period: string): string {
+  const [y, m] = period.split('-');
+  return `${m}.${y}`;
+}
+
 /** Date -> '2026-09-01' (ayin ilk gunu) */
 export function toPeriod(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;

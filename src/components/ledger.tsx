@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { moduleAccent, statusColors, useTheme } from '@/lib/theme';
-import { dayLabel, isFuturePeriod, money, moneyShort, num } from '@/lib/format';
-import { MODULE_LABEL, type LedgerRow, type ModuleType, type PeriodSummary } from '@/lib/types';
-import type { ProjectedSite } from '@/lib/api';
+import { currentPeriod, dayLabel, isFuturePeriod, money, moneyShort, num, periodLabel } from '@/lib/format';
+import { MODULE_LABEL, isUnrealizedFuture, type LedgerRow, type ModuleType, type PeriodSummary } from '@/lib/types';
+import { useRangeSummary, type ProjectedSite, type RangePeriodSummary } from '@/lib/api';
 import { PeriodSwitcher } from './pickers';
 import { Txt } from './ui';
 
@@ -35,6 +35,13 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
   const paid = num(row.net_paid);
   // is_active migration'dan once undefined olabilir; bkz. matchesQuickFilter yorumu
   const isActive = row.is_active !== false;
+  // Gelecek bir donem icin henuz gercek islem girilmediyse (bkz. types.ts):
+  // base_fee acilmis olsa bile "Bekliyor/Eksik Odeme" gibi gercek bir borc
+  // statusu YANLIS bir izlenim verir — "Zamanı Gelmedi" olarak gosterilir.
+  const unrealized = isActive && isUnrealizedFuture(row);
+  const carriedOver = num(row.carried_over_balance);
+  const hasCarriedOverDebt = carriedOver >= 0.01;
+  const looksSettled = row.status_key === 'completed' || row.status_key === 'overpaid';
 
   return (
     <Pressable
@@ -46,7 +53,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
         borderColor: c.border,
         padding: spacing.lg,
         gap: spacing.sm,
-        opacity: isActive ? 1 : 0.6,
+        opacity: !isActive || unrealized ? 0.6 : 1,
       })}
     >
       {/* Ust satir: site adi + durum */}
@@ -58,9 +65,11 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
             {row.days_overdue > 0 ? ` · ${row.days_overdue} gün gecikme` : ''}
           </Txt>
         </View>
-        {isActive
-          ? <StatusPill statusKey={row.status_key} label={row.status_label} small />
-          : <StatusPill statusKey="passive" label="Pasif" small />}
+        {!isActive
+          ? <StatusPill statusKey="passive" label="Pasif" small />
+          : unrealized
+            ? <StatusPill statusKey="future" label="Zamanı Gelmedi" small />
+            : <StatusPill statusKey={row.status_key} label={row.status_label} small />}
       </View>
 
       {/* Alt satir: tutarlar */}
@@ -72,7 +81,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
                 color={balance > 0 ? c.danger : c.ok} strong />
       </View>
 
-      {num(row.extra_total) > 0 || num(row.discount_total) > 0 ? (
+      {num(row.extra_total) > 0 || num(row.discount_total) > 0 || row.entry_count > 0 ? (
         <View style={{ flexDirection: 'row', gap: spacing.md }}>
           {num(row.extra_total) > 0 && (
             <Txt variant="tiny" color={c.warn}>+ Ekstra {moneyShort(row.extra_total)}</Txt>
@@ -85,6 +94,22 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
           )}
         </View>
       ) : null}
+
+      {/* Kumulatif gecmis borc uyarisi: "Tamamlandı" yazan bir kart bile
+          esnafi yanlis anlamaya sevk etmesin — bkz. kullanici geri bildirimi */}
+      {isActive && !unrealized && hasCarriedOverDebt && (
+        <View style={{
+          backgroundColor: c.dangerSoft, borderRadius: radius.sm,
+          paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, alignSelf: 'flex-start',
+        }}>
+          <Txt variant="tiny" color={c.danger} style={{ fontWeight: '700' }}>
+            ⚠ Geçmişten Devreden Borç: {money(carriedOver)}
+          </Txt>
+        </View>
+      )}
+      {isActive && !unrealized && !hasCarriedOverDebt && looksSettled && (
+        <Txt variant="tiny" color={c.ok}>✓ Geçmişten devreden borcu yok</Txt>
+      )}
     </Pressable>
   );
 }
@@ -243,11 +268,6 @@ export interface ModuleProjectionEntry {
   projected: { site_count: number; total_expected: number } | null | undefined;
 }
 
-export interface ModuleYearlyEntry {
-  module: ModuleType;
-  yearly: { total_expected: number; total_collected: number; total_balance: number } | null | undefined;
-}
-
 interface DisplayRow {
   module: ModuleType;
   expected: number;
@@ -274,23 +294,20 @@ interface DisplayRow {
  */
 export function CashSummaryPanel({
   entries, projectedEntries, loading, period, onPeriodChange,
-  yearlyEntries, yearlyLoading, yearlyOpen, onOpenYearly, onCloseYearly,
+  rangeOpen, onOpenRange, onCloseRange,
 }: {
   entries: ModuleSummaryEntry[];
   projectedEntries?: ModuleProjectionEntry[];
   loading?: boolean;
   period: string;
   onPeriodChange: (period: string) => void;
-  /** "Tüm Yılı Göster" pop-up'ı icin — hicbiri verilmezse buton gosterilmez */
-  yearlyEntries?: ModuleYearlyEntry[];
-  yearlyLoading?: boolean;
-  yearlyOpen?: boolean;
-  onOpenYearly?: () => void;
-  onCloseYearly?: () => void;
+  /** "Tüm Yılı Göster" pop-up'ı icin — onOpenRange verilmezse buton gosterilmez */
+  rangeOpen?: boolean;
+  onOpenRange?: () => void;
+  onCloseRange?: () => void;
 }) {
   const { c, dark, spacing, radius } = useTheme();
   const [expanded, setExpanded] = useState(false);
-  const year = Number(period.slice(0, 4));
 
   const hasAnyRealData = entries.some(e => !!e.summary);
   const isProjection = !hasAnyRealData && isFuturePeriod(period) && !!projectedEntries;
@@ -420,9 +437,9 @@ export function CashSummaryPanel({
             </View>
           )}
 
-          {!!onOpenYearly && (
+          {!!onOpenRange && (
             <Pressable
-              onPress={onOpenYearly}
+              onPress={onOpenRange}
               style={({ pressed }) => ({
                 alignItems: 'center', paddingVertical: spacing.sm,
                 borderRadius: radius.md, backgroundColor: pressed ? c.surfaceAlt : 'transparent',
@@ -435,42 +452,51 @@ export function CashSummaryPanel({
         </>
       )}
 
-      <YearlySummaryModal
-        visible={!!yearlyOpen}
-        year={year}
-        entries={yearlyEntries ?? []}
-        loading={yearlyLoading}
-        onClose={() => onCloseYearly?.()}
+      <RangeSummaryModal
+        visible={!!rangeOpen}
+        modules={entries.map(e => e.module)}
+        onClose={() => onCloseRange?.()}
       />
     </View>
   );
 }
 
 /**
- * "Tüm Yılı Göster" pop-up'ı — o an goruntulenen donemin YILINA ait
- * (Ocak-Aralık, o ana kadar acilmis donemler) toplam Beklenen/Tahsil/Kalan
- * rakamlarini, modul kirilimiyla birlikte gosterir.
+ * "Tarih Aralığı Bilançosu" pop-up'ı — kullanicinin secebilecegi bir
+ * [Başlangıç Ayı, Bitiş Ayı] araligina ait toplam Beklenen/Tahsil/Kalan'i,
+ * VE modul basina ay-ay (en guncelden eskiye, kaydirilabilir) kirilimi
+ * gosterir. Varsayilan aralik: bu yilin Ocak'i — bu ay.
  */
-function YearlySummaryModal({ visible, year, entries, loading, onClose }: {
+function RangeSummaryModal({ visible, modules, onClose }: {
   visible: boolean;
-  year: number;
-  entries: ModuleYearlyEntry[];
-  loading?: boolean;
+  modules: ModuleType[];
   onClose: () => void;
 }) {
   const { c, dark, spacing, radius } = useTheme();
+  const [startPeriod, setStartPeriod] = useState(`${new Date().getFullYear()}-01-01`);
+  const [endPeriod, setEndPeriod] = useState(currentPeriod());
 
-  const totals = entries.reduce(
-    (acc, e) => {
-      if (!e.yearly) return acc;
-      acc.expected += e.yearly.total_expected;
-      acc.collected += e.yearly.total_collected;
-      acc.balance += e.yearly.total_balance;
+  const elevatorRange = useRangeSummary('elevator', startPeriod, endPeriod, visible && modules.includes('elevator'));
+  const cleaningRange = useRangeSummary('cleaning', startPeriod, endPeriod, visible && modules.includes('cleaning'));
+  const loading = elevatorRange.isLoading || cleaningRange.isLoading;
+  const rangeValid = startPeriod <= endPeriod;
+
+  const perModule: { module: ModuleType; data: RangePeriodSummary[] }[] = [
+    { module: 'elevator' as ModuleType, data: elevatorRange.data ?? [] },
+    { module: 'cleaning' as ModuleType, data: cleaningRange.data ?? [] },
+  ].filter(e => modules.includes(e.module));
+
+  const totals = perModule.reduce(
+    (acc, m) => {
+      for (const p of m.data) {
+        acc.expected += p.total_expected;
+        acc.collected += p.total_collected;
+        acc.balance += p.total_balance;
+      }
       return acc;
     },
     { expected: 0, collected: 0, balance: 0 },
   );
-  const hasBreakdown = entries.filter(e => !!e.yearly).length > 1;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -480,59 +506,69 @@ function YearlySummaryModal({ visible, year, entries, loading, onClose }: {
       >
         <Pressable
           onPress={e => e.stopPropagation()}
-          style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '80%' }}
+          style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '85%' }}
         >
           <View style={{
-            padding: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+            padding: spacing.lg, gap: spacing.md,
+            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
           }}>
-            <Txt variant="h3">{year} Yıllık Bilanço</Txt>
-            <Txt variant="tiny" color={c.textFaint}>Ocak – Aralık, o ana kadar açılmış dönemler</Txt>
+            <Txt variant="h3">Tarih Aralığı Bilançosu</Txt>
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt variant="tiny" color={c.textFaint}>Başlangıç Ayı</Txt>
+                <PeriodSwitcher period={startPeriod} onChange={setStartPeriod} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt variant="tiny" color={c.textFaint}>Bitiş Ayı</Txt>
+                <PeriodSwitcher period={endPeriod} onChange={setEndPeriod} />
+              </View>
+            </View>
           </View>
 
-          <View style={{ padding: spacing.lg, gap: spacing.lg }}>
-            {loading ? (
+          <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
+            {!rangeValid ? (
+              <Txt variant="small" color={c.danger}>Başlangıç ayı, bitiş ayından sonra olamaz.</Txt>
+            ) : loading ? (
               <Txt variant="small" color={c.textFaint}>Hesaplanıyor…</Txt>
             ) : (
               <>
                 <View style={{ gap: spacing.md }}>
-                  <BigStat label="Yıllık Toplam Beklenen" value={totals.expected} color={c.text} full />
+                  <BigStat label="Toplam Beklenen" value={totals.expected} color={c.text} full />
                   <View style={{ flexDirection: 'row', gap: spacing.lg }}>
-                    <BigStat label="Yıllık Tahsil Edilen" value={totals.collected} color={c.ok} />
-                    <BigStat label="Yıllık Kalan Alacak" value={totals.balance} color={c.danger} />
+                    <BigStat label="Tahsil Edilen" value={totals.collected} color={c.ok} />
+                    <BigStat label="Kalan Alacak" value={totals.balance} color={c.danger} />
                   </View>
                 </View>
 
-                {hasBreakdown && (
-                  <View style={{ gap: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: spacing.md }}>
-                    {entries.map(e => (
-                      <View key={e.module} style={{
-                        backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm,
+                {perModule.map(m => (
+                  <View key={m.module} style={{ gap: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: spacing.md }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                      <View style={{
+                        width: 8, height: 8, borderRadius: 4,
+                        backgroundColor: dark ? moduleAccent[m.module].dark : moduleAccent[m.module].light,
+                      }} />
+                      <Txt variant="h3">{MODULE_LABEL[m.module]}</Txt>
+                      <Txt variant="tiny" color={c.textFaint}>({m.data.length} ay)</Txt>
+                    </View>
+
+                    {m.data.length === 0 ? (
+                      <Txt variant="tiny" color={c.textFaint}>Bu aralıkta veri yok.</Txt>
+                    ) : m.data.map(p => (
+                      <View key={p.period} style={{
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                        backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md,
                       }}>
-                        {e.yearly ? (
-                          <>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                              <View style={{
-                                width: 8, height: 8, borderRadius: 4,
-                                backgroundColor: dark ? moduleAccent[e.module].dark : moduleAccent[e.module].light,
-                              }} />
-                              <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{MODULE_LABEL[e.module]}</Txt>
-                            </View>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                              <BreakdownStat label="Beklenen" value={e.yearly.total_expected} color={c.textMuted} />
-                              <BreakdownStat label="Tahsil" value={e.yearly.total_collected} color={c.ok} />
-                              <BreakdownStat label="Kalan" value={e.yearly.total_balance} color={c.danger} />
-                            </View>
-                          </>
-                        ) : (
-                          <Txt variant="small" color={c.textFaint}>{MODULE_LABEL[e.module]}: {money(0)} (Kayıt Yok)</Txt>
-                        )}
+                        <Txt variant="small" color={c.textMuted} style={{ width: 84 }}>{periodLabel(p.period)}</Txt>
+                        <BreakdownStat label="Beklenen" value={p.total_expected} color={c.textMuted} />
+                        <BreakdownStat label="Tahsil" value={p.total_collected} color={c.ok} />
+                        <BreakdownStat label="Kalan" value={p.total_balance} color={c.danger} />
                       </View>
                     ))}
                   </View>
-                )}
+                ))}
               </>
             )}
-          </View>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>

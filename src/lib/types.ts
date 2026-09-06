@@ -1,4 +1,5 @@
 /** Veritabani gorunumlerinin (view) TypeScript karsiliklari */
+import { isFuturePeriod } from './format';
 
 export type ModuleType = 'elevator' | 'cleaning';
 export type StatusKey = 'pending' | 'partial' | 'overdue' | 'overdue_partial' | 'completed' | 'overpaid';
@@ -49,6 +50,20 @@ export interface LedgerRow {
   is_locked: boolean;
   created_at: string;
   updated_at: string;
+  /** Bu satirin DONEMINDEN ONCEKI tum donemlerin toplam bakiyesi (kumulatif gecmis borc/alacak) */
+  carried_over_balance: string;
+  /** Site duzeyi not (sites.notes) — donem notundan (notes) farkli */
+  site_notes: string | null;
+}
+
+/**
+ * Gelecek bir donem icin gercek bir islem (ekstra/odeme) HENUZ girilmediyse
+ * (entry_count = 0), bu satir "gerciklesmemis" sayilir — base_fee snapshot'i
+ * acilmis olsa bile esnafa gercek bir borc/tahsilat gibi gosterilmemelidir.
+ * "Zamanı Gelmedi" olarak ele alinir (bkz. LedgerListItem / matchesQuickFilter).
+ */
+export function isUnrealizedFuture(row: LedgerRow): boolean {
+  return isFuturePeriod(row.period) && row.entry_count === 0;
 }
 
 /**
@@ -60,7 +75,7 @@ export interface LedgerRow {
  * gruplarla kesisebilir (ornegin hic odemeyip suresi de gecmis bir kayit
  * hem "Hiç Ödemeyenler" hem "Süresi Geçenler" icinde gorunur).
  */
-export type QuickFilterKey = 'all' | 'unpaid' | 'partial' | 'overdue' | 'completed' | 'passive';
+export type QuickFilterKey = 'all' | 'unpaid' | 'partial' | 'overdue' | 'completed' | 'carried_over' | 'passive';
 
 /**
  * Liste ekranindaki filtre secenekleri — 'all' varsayilan.
@@ -70,12 +85,13 @@ export type QuickFilterKey = 'all' | 'unpaid' | 'partial' | 'overdue' | 'complet
  * secmelidir (bkz. matchesQuickFilter).
  */
 export const QUICK_FILTERS: { key: QuickFilterKey; label: string }[] = [
-  { key: 'all',       label: 'Tümü' },
-  { key: 'unpaid',    label: 'Hiç Ödemeyenler' },
-  { key: 'partial',   label: 'Kısmi Ödeyenler / Eksik' },
-  { key: 'overdue',   label: 'Süresi Geçenler' },
-  { key: 'completed', label: 'Borcu Bitenler / Tamamlandı' },
-  { key: 'passive',   label: 'Pasif Siteler' },
+  { key: 'all',          label: 'Tümü' },
+  { key: 'unpaid',       label: 'Hiç Ödemeyenler' },
+  { key: 'partial',      label: 'Kısmi Ödeyenler / Eksik' },
+  { key: 'overdue',      label: 'Süresi Geçenler' },
+  { key: 'completed',    label: 'Borcu Bitenler / Tamamlandı' },
+  { key: 'carried_over', label: 'Geçmiş Borcu Olanlar' },
+  { key: 'passive',      label: 'Pasif Siteler' },
 ];
 
 /**
@@ -85,17 +101,24 @@ export const QUICK_FILTERS: { key: QuickFilterKey; label: string }[] = [
  * "henuz bilinmiyor" anlamina gelmeli — aksi halde migration'dan once
  * calisan bir istemcide TUM siteler yanlislikla "pasif" sayilip ana
  * listeden kaybolur.
+ *
+ * unpaid/partial/overdue/completed filtreleri ayrica isUnrealizedFuture
+ * satirlari DISLAR — henuz gerceklesmemis (Zamani Gelmedi) bir donem,
+ * "Hic Odemeyenler" gibi eylem gerektiren filtrelerde yanlislikla
+ * gercek bir borc gibi gorunmemelidir.
  */
 export function matchesQuickFilter(row: LedgerRow, key: QuickFilterKey): boolean {
   const isActive = row.is_active !== false;
+  const isReal = !isUnrealizedFuture(row);
   switch (key) {
-    case 'unpaid':    return isActive && (row.status_key === 'pending' || row.status_key === 'overdue');
-    case 'partial':   return isActive && (row.status_key === 'partial' || row.status_key === 'overdue_partial');
-    case 'overdue':   return isActive && (row.status_key === 'overdue' || row.status_key === 'overdue_partial');
-    case 'completed': return isActive && (row.status_key === 'completed' || row.status_key === 'overpaid');
-    case 'passive':   return !isActive;
+    case 'unpaid':       return isActive && isReal && (row.status_key === 'pending' || row.status_key === 'overdue');
+    case 'partial':      return isActive && isReal && (row.status_key === 'partial' || row.status_key === 'overdue_partial');
+    case 'overdue':      return isActive && isReal && (row.status_key === 'overdue' || row.status_key === 'overdue_partial');
+    case 'completed':    return isActive && isReal && (row.status_key === 'completed' || row.status_key === 'overpaid');
+    case 'carried_over': return isActive && Number(row.carried_over_balance) >= 0.01;
+    case 'passive':      return !isActive;
     case 'all':
-    default:          return isActive;
+    default:             return isActive;
   }
 }
 

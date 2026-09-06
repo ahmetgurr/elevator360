@@ -5,8 +5,8 @@ import {
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { usePostTransaction, useSiteHistory, useUpdateNote } from '@/lib/api';
-import { money, num, parseAmount, periodLabel } from '@/lib/format';
-import type { LedgerRow, ModuleType } from '@/lib/types';
+import { currentPeriod, money, num, parseAmount, periodLabel } from '@/lib/format';
+import { finalBalanceState, overpaidAmount, type LedgerRow, type ModuleType } from '@/lib/types';
 import { StatusPill } from './ledger';
 import { EditSiteModal } from './EditSiteModal';
 import { Button, ConfirmModal, Field, Txt } from './ui';
@@ -23,7 +23,7 @@ interface NoteItem {
   isLocked: boolean;
 }
 
-export function QuickEntryModal({ row, module, period, canEdit, onClose, onSuccess, onSiteUpdated, onNavigateToPeriod }: {
+export function QuickEntryModal({ row, module, period, canEdit, onClose, onSuccess, onSiteUpdated, onNavigateToPeriod, onOpenStatement }: {
   row: LedgerRow | null;
   module: ModuleType;
   period: string;
@@ -35,6 +35,13 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   onSiteUpdated: (message: string) => void;
   /** "Ödeme Geçmişi" kartından tıklanınca o ayın tablosuna ve site detayına geçilir */
   onNavigateToPeriod: (period: string, row: LedgerRow) => void;
+  /**
+   * "Tüm Ayları Görüntüle" — Cari Ekstre modalini AYRI bir ust seviye Modal
+   * olarak actirmak icin ust bilesene devredilir (Modal-icinde-Modal
+   * yerlestirmesinden kacinilir; bazi mobil tarayicilarda ic ice Modal'larda
+   * dokunmatik scroll calismama sorunu yasanmisti — bkz. kullanici geri bildirimi).
+   */
+  onOpenStatement: (siteName: string, currentRow: LedgerRow, historyRows: LedgerRow[]) => void;
 }) {
   const { c, spacing, radius } = useTheme();
   const visible = !!row;
@@ -49,7 +56,6 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   const [requestId, setRequestId] = useState(makeRequestId);
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
   const [editSiteOpen, setEditSiteOpen] = useState(false);
-  const [statementOpen, setStatementOpen] = useState(false);
 
   // Modal yeni bir satir icin acildiginda alanlar ve istek kimligi sifirlanir
   useEffect(() => {
@@ -76,6 +82,14 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   const carryoverCleared = carriedOverAmount > 0 && overpaidThisMonth && netAfterCarryover <= 0.01;
   const carryoverStillOwed = carriedOverAmount > 0 && overpaidThisMonth && netAfterCarryover > 0.01;
   const extraCreditAfterClear = carryoverCleared && netAfterCarryover < -0.01 ? -netAfterCarryover : 0;
+  // Gecmisten borc yokken sadece bu ay fazla odeme girildiyse: ham negatif
+  // "Bu Ay Kalan" yerine pozitif "Bu Ay Fazla Ödenen" gosterilir.
+  const thisMonthOverpaidAmount = !carryoverCleared && !carryoverStillOwed ? overpaidAmount(num(row.balance)) : null;
+  const thisMonthRemaining = thisMonthOverpaidAmount !== null
+    ? { label: 'Bu Ay Fazla Ödenen', value: String(thisMonthOverpaidAmount), color: c.ok }
+    : { label: 'Bu Ay Kalan', value: row.balance, color: num(row.balance) > 0 ? c.danger : c.ok };
+  const isPastPeriod = row.period < currentPeriod();
+  const finalState = finalBalanceState(num(row.site_current_balance));
 
   const noteItems: NoteItem[] = [];
   if (currentNotes && currentNotes.trim()) {
@@ -133,10 +147,13 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
         >
           <Pressable
             onPress={e => e.stopPropagation()}
-            style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '88%' }}
+            style={{
+              backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
+              maxHeight: '88%', flexShrink: 1,
+            }}
           >
             <View style={{
-              padding: spacing.lg,
+              padding: spacing.lg, flexShrink: 0,
               borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
               flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm,
             }}>
@@ -145,7 +162,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                 <Txt variant="small" color={c.textMuted} numberOfLines={1}>{row.site_name}</Txt>
               </View>
               <Pressable
-                onPress={() => setStatementOpen(true)}
+                onPress={() => onOpenStatement(row.site_name, row, history.data ?? [])}
                 hitSlop={8}
                 style={({ pressed }) => ({
                   paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
@@ -168,7 +185,11 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
               )}
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={{ flexShrink: 1 }}
+              contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
+              keyboardShouldPersistTaps="handled"
+            >
               {carryoverCleared && (
                 <View style={{ backgroundColor: c.okSoft, borderRadius: radius.md, padding: spacing.md, gap: 2 }}>
                   <Txt variant="tiny" color={c.ok}>✓ Geçmiş Borç Kapatıldı / Sıfırlandı</Txt>
@@ -200,8 +221,26 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <MiniStat label="Bu Ay Toplam" value={row.total_due} color={c.textMuted} />
                 <MiniStat label="Bu Ay Ödenen" value={row.net_paid} color={c.ok} />
-                <MiniStat label="Bu Ay Kalan" value={row.balance} color={num(row.balance) > 0 ? c.danger : c.ok} />
+                <MiniStat label={thisMonthRemaining.label} value={thisMonthRemaining.value} color={thisMonthRemaining.color} />
               </View>
+
+              {isPastPeriod && (
+                <View style={{
+                  backgroundColor: finalState.kind === 'debt' ? c.dangerSoft : c.okSoft,
+                  borderRadius: radius.md, padding: spacing.md, gap: 2,
+                }}>
+                  <Txt variant="tiny" color={finalState.kind === 'debt' ? c.danger : c.ok}>
+                    📌 Sitenin Güncel Bakiyesi (Bugün)
+                  </Txt>
+                  <Txt variant="h3" color={finalState.kind === 'debt' ? c.danger : c.ok}>
+                    {finalState.kind === 'debt'
+                      ? `${money(finalState.amount)} Borçlu`
+                      : finalState.kind === 'credit'
+                        ? `${money(finalState.amount)} Alacaklı (Fazla Ödeme)`
+                        : 'Sıfırlandı (Borcu Yok)'}
+                  </Txt>
+                </View>
+              )}
 
               <Txt variant="tiny" color={c.textFaint}>
                 Ödeme Günü: {row.service_day ? `Ayın ${row.service_day}'i` : 'Belirtilmemiş'}
@@ -282,7 +321,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
             </ScrollView>
 
             <View style={{
-              flexDirection: 'row', gap: spacing.md, padding: spacing.lg,
+              flexDirection: 'row', gap: spacing.md, padding: spacing.lg, flexShrink: 0,
               borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
             }}>
               <Button title="Vazgeç" variant="secondary" onPress={handleClose}
@@ -313,28 +352,31 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
         onClose={() => setEditSiteOpen(false)}
         onSuccess={handleSiteUpdated}
       />
-
-      <SiteStatementModal
-        visible={statementOpen}
-        siteName={row.site_name}
-        currentRow={row}
-        historyRows={history.data ?? []}
-        onClose={() => setStatementOpen(false)}
-      />
     </Modal>
   );
 }
 
-/** Siteye ozel cari ekstre: gecmisten bugune tum donemler alt alta bir liste halinde */
-function SiteStatementModal({ visible, siteName, currentRow, historyRows, onClose }: {
+/**
+ * Siteye ozel cari ekstre: gecmisten bugune tum donemler alt alta bir liste
+ * halinde. QuickEntryModal'in KENDI Modal'i disinda, ust seviyede AYRI bir
+ * Modal olarak actirilir (Modal-icinde-Modal yerlestirmesinden kacinilir —
+ * bazi mobil tarayicilarda ic ice Modal'larda dokunmatik scroll calismama
+ * sorunu yasanmisti — bkz. kullanici geri bildirimi).
+ */
+export function SiteStatementModal({ visible, siteName, currentRow, historyRows, onClose }: {
   visible: boolean;
   siteName: string;
-  currentRow: LedgerRow;
+  currentRow: LedgerRow | null;
   historyRows: LedgerRow[];
   onClose: () => void;
 }) {
   const { c, spacing, radius } = useTheme();
+  if (!currentRow) return null;
   const rows = [currentRow, ...historyRows].slice().sort((a, b) => b.period.localeCompare(a.period));
+  // Site duzeyinde: hangi donem satirina bakilirsa bakilsin AYNI deger —
+  // sitenin BUGUNE kadarki nihai net bakiyesi (bkz. kullanici geri bildirimi,
+  // Bozyel 4 senaryosu: gecmis kirmizilarin bugune yansiyan toplami).
+  const finalState = finalBalanceState(num(currentRow.site_current_balance));
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -344,19 +386,40 @@ function SiteStatementModal({ visible, siteName, currentRow, historyRows, onClos
       >
         <Pressable
           onPress={e => e.stopPropagation()}
-          style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '85%' }}
+          style={{
+            backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
+            maxHeight: '85%', flexShrink: 1,
+          }}
         >
           <View style={{
-            padding: spacing.lg, gap: 2,
+            padding: spacing.lg, gap: spacing.sm, flexShrink: 0,
             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
           }}>
-            <Txt variant="h3">Cari Ekstre</Txt>
-            <Txt variant="small" color={c.textMuted} numberOfLines={1}>{siteName}</Txt>
+            <View style={{ gap: 2 }}>
+              <Txt variant="h3">Cari Ekstre</Txt>
+              <Txt variant="small" color={c.textMuted} numberOfLines={1}>{siteName}</Txt>
+            </View>
+            <View style={{
+              backgroundColor: finalState.kind === 'debt' ? c.dangerSoft : c.okSoft,
+              borderRadius: radius.md, padding: spacing.md, gap: 2,
+            }}>
+              <Txt variant="tiny" color={finalState.kind === 'debt' ? c.danger : c.ok} style={{ fontWeight: '700' }}>
+                NİHAİ DURUM (Bugün İtibarıyla)
+              </Txt>
+              <Txt variant="h2" color={finalState.kind === 'debt' ? c.danger : c.ok}>
+                {finalState.kind === 'debt'
+                  ? `${money(finalState.amount)} Borçlu`
+                  : finalState.kind === 'credit'
+                    ? `${money(finalState.amount)} Alacaklı`
+                    : 'Sıfırlandı / Borcu Yok'}
+              </Txt>
+            </View>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}>
+          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}>
             {rows.map(r => {
               const balance = num(r.balance);
+              const overpaid = overpaidAmount(balance);
               return (
                 <View
                   key={r.ledger_id}
@@ -374,7 +437,9 @@ function SiteStatementModal({ visible, siteName, currentRow, historyRows, onClos
                     <MiniStat label="Aidat" value={r.base_fee} color={c.textMuted} />
                     {num(r.extra_total) > 0 && <MiniStat label="Ekstra" value={r.extra_total} color={c.warn} />}
                     <MiniStat label="Ödenen" value={r.net_paid} color={c.ok} />
-                    <MiniStat label="Kalan" value={r.balance} color={balance > 0 ? c.danger : c.ok} />
+                    {overpaid !== null
+                      ? <MiniStat label="Fazla Ödenen" value={String(overpaid)} color={c.ok} />
+                      : <MiniStat label="Kalan" value={r.balance} color={balance > 0 ? c.danger : c.ok} />}
                   </View>
                 </View>
               );
@@ -384,7 +449,7 @@ function SiteStatementModal({ visible, siteName, currentRow, historyRows, onClos
             )}
           </ScrollView>
 
-          <View style={{ padding: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border }}>
+          <View style={{ padding: spacing.lg, flexShrink: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border }}>
             <Button title="Kapat" variant="secondary" onPress={onClose} />
           </View>
         </Pressable>

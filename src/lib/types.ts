@@ -54,6 +54,8 @@ export interface LedgerRow {
   carried_over_balance: string;
   /** Site duzeyi not (sites.notes) — donem notundan (notes) farkli */
   site_notes: string | null;
+  /** Sitenin BUGUNE kadarki nihai net bakiyesi — hangi donem satirina bakilirsa bakilsin AYNIDIR */
+  site_current_balance: string;
 }
 
 /**
@@ -64,6 +66,25 @@ export interface LedgerRow {
  */
 export function isUnrealizedFuture(row: LedgerRow): boolean {
   return isFuturePeriod(row.period) && row.entry_count === 0;
+}
+
+/** Bakiye eksiyse (fazla odeme yapilmissa) pozitif "fazla odenen" tutarini dondurur, degilse null */
+export function overpaidAmount(balance: number): number | null {
+  return balance < -0.01 ? -balance : null;
+}
+
+export type FinalBalanceState = { kind: 'debt' | 'credit' | 'settled'; amount: number };
+
+/**
+ * Sitenin BUGUNE kadarki nihai net bakiyesinin (site_current_balance)
+ * esnafa gosterilecek sade karsiligi. Gecmis bir ay kartinda o ayin
+ * KENDI durumu borclu gorunse bile, site sonradan kapatilmis olabilir —
+ * bu fonksiyon HER ZAMAN "bugun itibariyla gercek durum"u ifade eder.
+ */
+export function finalBalanceState(siteCurrentBalance: number): FinalBalanceState {
+  if (siteCurrentBalance > 0.01) return { kind: 'debt', amount: siteCurrentBalance };
+  if (siteCurrentBalance < -0.01) return { kind: 'credit', amount: -siteCurrentBalance };
+  return { kind: 'settled', amount: 0 };
 }
 
 /**

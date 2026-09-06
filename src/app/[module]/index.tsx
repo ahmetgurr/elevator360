@@ -16,7 +16,7 @@ import {
 import { ConfirmModal, EmptyState, ErrorState, Loading, Toast, Txt } from '@/components/ui';
 import { LedgerListItem, ProjectedSiteListItem, ProjectedSummaryCard, SummaryStrip } from '@/components/ledger';
 import { FilterDropdown, PeriodSwitcher, SearchBar } from '@/components/pickers';
-import { QuickEntryModal } from '@/components/QuickEntryModal';
+import { QuickEntryModal, SiteStatementModal } from '@/components/QuickEntryModal';
 import { AddSiteModal } from '@/components/AddSiteModal';
 import { EditSiteModal } from '@/components/EditSiteModal';
 
@@ -40,6 +40,7 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
   const [exporting, setExporting] = useState(false);
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
+  const [statement, setStatement] = useState<{ siteName: string; currentRow: LedgerRow; historyRows: LedgerRow[] } | null>(null);
 
   const ledger = useLedger(module, period);
   const summary = usePeriodSummary(module, period);
@@ -264,6 +265,15 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
           setToast({ visible: true, variant: 'success', message });
         }}
         onNavigateToPeriod={handleNavigateToPeriod}
+        onOpenStatement={(siteName, currentRow, historyRows) => setStatement({ siteName, currentRow, historyRows })}
+      />
+
+      <SiteStatementModal
+        visible={!!statement}
+        siteName={statement?.siteName ?? ''}
+        currentRow={statement?.currentRow ?? null}
+        historyRows={statement?.historyRows ?? []}
+        onClose={() => setStatement(null)}
       />
 
       <EditSiteModal

@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { moduleAccent, statusColors, useTheme } from '@/lib/theme';
 import { currentPeriod, dayLabel, isFuturePeriod, money, moneyShort, num, periodLabel } from '@/lib/format';
-import { MODULE_LABEL, isUnrealizedFuture, type LedgerRow, type ModuleType, type PeriodSummary } from '@/lib/types';
+import {
+  MODULE_LABEL, finalBalanceState, isUnrealizedFuture, overpaidAmount,
+  type LedgerRow, type ModuleType, type PeriodSummary,
+} from '@/lib/types';
 import { useRangeSummary, type ProjectedSite, type RangePeriodSummary } from '@/lib/api';
 import { PeriodSwitcher } from './pickers';
 import { Txt } from './ui';
@@ -52,6 +55,23 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
   const carryoverCleared = isOverpaidThisMonth && hasCarriedOverDebt && netAfterCarryover <= 0.01;
   const carryoverStillOwed = isOverpaidThisMonth && hasCarriedOverDebt && netAfterCarryover > 0.01;
   const extraCredit = carryoverCleared && netAfterCarryover < -0.01 ? -netAfterCarryover : 0;
+  // Gecmisten borc YOKKEN sadece bu ay fazla odeme girildiyse (basit
+  // fazla odeme): ham negatif "Kalan" yerine pozitif "Fazla Ödenen"
+  // etiketiyle gosterilir — bkz. kullanici geri bildirimi.
+  const simpleOverpaid = !carryoverCleared && !carryoverStillOwed ? overpaidAmount(balance) : null;
+  const remainingAmount = carryoverCleared
+    ? { label: 'Kalan', value: '0', color: c.ok }
+    : carryoverStillOwed
+      ? { label: 'Kalan', value: String(netAfterCarryover), color: c.danger }
+      : simpleOverpaid !== null
+        ? { label: 'Fazla Ödenen', value: String(simpleOverpaid), color: c.ok }
+        : { label: 'Kalan', value: row.balance, color: balance > 0 ? c.danger : c.ok };
+  // Gecmis bir ay kartina bakilirken bile sitenin BUGUNKU nihai bakiyesi
+  // net gorunsun — bkz. kullanici geri bildirimi (Bozyel 4 senaryosu):
+  // Temmuz karti kendi basina borclu gorunse bile, site Agustos'ta toplu
+  // odemeyle kapanmis olabilir.
+  const isPastPeriod = row.period < currentPeriod();
+  const finalState = finalBalanceState(num(row.site_current_balance));
 
   return (
     <Pressable
@@ -87,10 +107,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
         <Amount label="Toplam" value={row.total_due} color={c.textMuted} />
         <Amount label="Ödenen" value={row.net_paid}
                 color={paid > 0 ? c.ok : c.textFaint} />
-        <Amount label="Kalan"
-                value={carryoverCleared ? '0' : carryoverStillOwed ? String(netAfterCarryover) : row.balance}
-                color={carryoverCleared ? c.ok : (carryoverStillOwed ? c.danger : (balance > 0 ? c.danger : c.ok))}
-                strong />
+        <Amount label={remainingAmount.label} value={remainingAmount.value} color={remainingAmount.color} strong />
       </View>
 
       {num(row.extra_total) > 0 || num(row.discount_total) > 0 || row.entry_count > 0 ? (
@@ -143,6 +160,25 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
       )}
       {isActive && !unrealized && !hasCarriedOverDebt && !carryoverCleared && looksSettled && (
         <Txt variant="tiny" color={c.ok}>✓ Geçmişten devreden borcu yok</Txt>
+      )}
+
+      {/* Gecmis bir ay kartinda olsak bile sitenin BUGUNKU nihai durumu —
+          bkz. kullanici geri bildirimi (Bozyel 4 senaryosu) */}
+      {isActive && !unrealized && isPastPeriod && (
+        <View style={{
+          backgroundColor: finalState.kind === 'debt' ? c.dangerSoft : c.okSoft,
+          borderRadius: radius.sm,
+          paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, alignSelf: 'flex-start',
+        }}>
+          <Txt variant="tiny" color={finalState.kind === 'debt' ? c.danger : c.ok}>
+            📌 Sitenin Güncel Bakiyesi (Bugün):{' '}
+            {finalState.kind === 'debt'
+              ? `${money(finalState.amount)} Borçlu`
+              : finalState.kind === 'credit'
+                ? `${money(finalState.amount)} Alacaklı (Fazla Ödeme)`
+                : 'Sıfırlandı (Borcu Yok)'}
+          </Txt>
+        </View>
       )}
     </Pressable>
   );
@@ -541,10 +577,13 @@ function RangeSummaryModal({ visible, modules, onClose }: {
       >
         <Pressable
           onPress={e => e.stopPropagation()}
-          style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '85%' }}
+          style={{
+            backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
+            maxHeight: '85%', flexShrink: 1,
+          }}
         >
           <View style={{
-            padding: spacing.lg, gap: spacing.md,
+            padding: spacing.lg, gap: spacing.md, flexShrink: 0,
             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
           }}>
             <Txt variant="h3">Tarih Aralığı Bilançosu</Txt>
@@ -560,7 +599,11 @@ function RangeSummaryModal({ visible, modules, onClose }: {
             </View>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
+          <ScrollView
+            style={{ flexShrink: 1 }}
+            contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
+            keyboardShouldPersistTaps="handled"
+          >
             {!rangeValid ? (
               <Txt variant="small" color={c.danger}>Başlangıç ayı, bitiş ayından sonra olamaz.</Txt>
             ) : loading ? (

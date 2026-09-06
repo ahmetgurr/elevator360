@@ -145,6 +145,44 @@ export function useProjectedSites(module: ModuleType, period: string, enabled = 
   });
 }
 
+export interface YearlySummary {
+  total_expected: number;
+  total_collected: number;
+  total_balance: number;
+}
+
+/**
+ * "Tüm Yılı Göster" pop-up'ı için — verilen yılın (Ocak-Aralık) o ana
+ * kadar ACILMIŞ tüm donemlerini v_period_summary'den toplar. Yeni bir
+ * view/migration gerekmez; mevcut view zaten donem bazinda topluyor,
+ * burada sadece yil icindeki donemler client tarafinda toplanir.
+ */
+export function useYearlySummary(module: ModuleType, year: number, enabled = true) {
+  return useQuery({
+    queryKey: ['yearly-summary', module, year],
+    enabled,
+    queryFn: async (): Promise<YearlySummary> => {
+      const { data, error } = await supabase
+        .from('v_period_summary')
+        .select('total_expected, total_collected, total_balance')
+        .eq('module', module)
+        .gte('period', `${year}-01-01`)
+        .lte('period', `${year}-12-01`);
+      if (error) throw new Error(error.message);
+
+      return (data ?? []).reduce(
+        (acc, r: { total_expected: string; total_collected: string; total_balance: string }) => {
+          acc.total_expected += num(r.total_expected);
+          acc.total_collected += num(r.total_collected);
+          acc.total_balance += num(r.total_balance);
+          return acc;
+        },
+        { total_expected: 0, total_collected: 0, total_balance: 0 },
+      );
+    },
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* Site gecmisi (odeme sicili + gecmisten devreden bakiye)             */
 /* ------------------------------------------------------------------ */

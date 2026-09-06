@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { moduleAccent, statusColors, useTheme } from '@/lib/theme';
 import { dayLabel, isFuturePeriod, money, moneyShort, num } from '@/lib/format';
 import { MODULE_LABEL, type LedgerRow, type ModuleType, type PeriodSummary } from '@/lib/types';
@@ -243,6 +243,11 @@ export interface ModuleProjectionEntry {
   projected: { site_count: number; total_expected: number } | null | undefined;
 }
 
+export interface ModuleYearlyEntry {
+  module: ModuleType;
+  yearly: { total_expected: number; total_collected: number; total_balance: number } | null | undefined;
+}
+
 interface DisplayRow {
   module: ModuleType;
   expected: number;
@@ -267,15 +272,25 @@ interface DisplayRow {
  * ensure_current_period tarafindan acilmamis), projectedEntries
  * verilmisse "Öngörülen Bilanço" moduna geçilir — bkz. useProjectedSummary.
  */
-export function CashSummaryPanel({ entries, projectedEntries, loading, period, onPeriodChange }: {
+export function CashSummaryPanel({
+  entries, projectedEntries, loading, period, onPeriodChange,
+  yearlyEntries, yearlyLoading, yearlyOpen, onOpenYearly, onCloseYearly,
+}: {
   entries: ModuleSummaryEntry[];
   projectedEntries?: ModuleProjectionEntry[];
   loading?: boolean;
   period: string;
   onPeriodChange: (period: string) => void;
+  /** "Tüm Yılı Göster" pop-up'ı icin — hicbiri verilmezse buton gosterilmez */
+  yearlyEntries?: ModuleYearlyEntry[];
+  yearlyLoading?: boolean;
+  yearlyOpen?: boolean;
+  onOpenYearly?: () => void;
+  onCloseYearly?: () => void;
 }) {
   const { c, dark, spacing, radius } = useTheme();
   const [expanded, setExpanded] = useState(false);
+  const year = Number(period.slice(0, 4));
 
   const hasAnyRealData = entries.some(e => !!e.summary);
   const isProjection = !hasAnyRealData && isFuturePeriod(period) && !!projectedEntries;
@@ -404,9 +419,123 @@ export function CashSummaryPanel({ entries, projectedEntries, loading, period, o
               </View>
             </View>
           )}
+
+          {!!onOpenYearly && (
+            <Pressable
+              onPress={onOpenYearly}
+              style={({ pressed }) => ({
+                alignItems: 'center', paddingVertical: spacing.sm,
+                borderRadius: radius.md, backgroundColor: pressed ? c.surfaceAlt : 'transparent',
+                borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
+              })}
+            >
+              <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>🗓 Tüm Yılı Göster</Txt>
+            </Pressable>
+          )}
         </>
       )}
+
+      <YearlySummaryModal
+        visible={!!yearlyOpen}
+        year={year}
+        entries={yearlyEntries ?? []}
+        loading={yearlyLoading}
+        onClose={() => onCloseYearly?.()}
+      />
     </View>
+  );
+}
+
+/**
+ * "Tüm Yılı Göster" pop-up'ı — o an goruntulenen donemin YILINA ait
+ * (Ocak-Aralık, o ana kadar acilmis donemler) toplam Beklenen/Tahsil/Kalan
+ * rakamlarini, modul kirilimiyla birlikte gosterir.
+ */
+function YearlySummaryModal({ visible, year, entries, loading, onClose }: {
+  visible: boolean;
+  year: number;
+  entries: ModuleYearlyEntry[];
+  loading?: boolean;
+  onClose: () => void;
+}) {
+  const { c, dark, spacing, radius } = useTheme();
+
+  const totals = entries.reduce(
+    (acc, e) => {
+      if (!e.yearly) return acc;
+      acc.expected += e.yearly.total_expected;
+      acc.collected += e.yearly.total_collected;
+      acc.balance += e.yearly.total_balance;
+      return acc;
+    },
+    { expected: 0, collected: 0, balance: 0 },
+  );
+  const hasBreakdown = entries.filter(e => !!e.yearly).length > 1;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, backgroundColor: 'rgba(11,21,38,0.55)', justifyContent: 'center', padding: spacing.xl }}
+      >
+        <Pressable
+          onPress={e => e.stopPropagation()}
+          style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '80%' }}
+        >
+          <View style={{
+            padding: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+          }}>
+            <Txt variant="h3">{year} Yıllık Bilanço</Txt>
+            <Txt variant="tiny" color={c.textFaint}>Ocak – Aralık, o ana kadar açılmış dönemler</Txt>
+          </View>
+
+          <View style={{ padding: spacing.lg, gap: spacing.lg }}>
+            {loading ? (
+              <Txt variant="small" color={c.textFaint}>Hesaplanıyor…</Txt>
+            ) : (
+              <>
+                <View style={{ gap: spacing.md }}>
+                  <BigStat label="Yıllık Toplam Beklenen" value={totals.expected} color={c.text} full />
+                  <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+                    <BigStat label="Yıllık Tahsil Edilen" value={totals.collected} color={c.ok} />
+                    <BigStat label="Yıllık Kalan Alacak" value={totals.balance} color={c.danger} />
+                  </View>
+                </View>
+
+                {hasBreakdown && (
+                  <View style={{ gap: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: spacing.md }}>
+                    {entries.map(e => (
+                      <View key={e.module} style={{
+                        backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm,
+                      }}>
+                        {e.yearly ? (
+                          <>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                              <View style={{
+                                width: 8, height: 8, borderRadius: 4,
+                                backgroundColor: dark ? moduleAccent[e.module].dark : moduleAccent[e.module].light,
+                              }} />
+                              <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{MODULE_LABEL[e.module]}</Txt>
+                            </View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                              <BreakdownStat label="Beklenen" value={e.yearly.total_expected} color={c.textMuted} />
+                              <BreakdownStat label="Tahsil" value={e.yearly.total_collected} color={c.ok} />
+                              <BreakdownStat label="Kalan" value={e.yearly.total_balance} color={c.danger} />
+                            </View>
+                          </>
+                        ) : (
+                          <Txt variant="small" color={c.textFaint}>{MODULE_LABEL[e.module]}: {money(0)} (Kayıt Yok)</Txt>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 

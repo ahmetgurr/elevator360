@@ -41,11 +41,12 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
   const ledger = useLedger(module, period);
   const summary = usePeriodSummary(module, period);
   const future = isFuturePeriod(period);
+  // Icinde bulunulan ay da dahil: bugune kadar acilmis olmasi GEREKEN ama
+  // henuz acilmamis siteler icin de "oncelenen" kart gosterilebilsin.
+  const isCurrentOrFuture = period >= currentPeriod();
   const projectedSummary = useProjectedSummary(module, period, future);
-  const projectedSites = useProjectedSites(module, period, future);
+  const projectedSites = useProjectedSites(module, period, isCurrentOrFuture);
   const hasRows = (ledger.data?.length ?? 0) > 0;
-  // Gercek satir yoksa VE donem gelecekteyse: "acilacak" siteleri mock olarak goster
-  const isProjectedMode = future && !hasRows && !ledger.isLoading;
 
   async function handleExport() {
     const data = ledger.data ?? [];
@@ -118,17 +119,26 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
     return sortLedgerRows(bySearch, sortKey);
   }, [ledger.data, filter, search, sortKey]);
 
-  const projectedRows = useMemo(() => {
-    const data = projectedSites.data ?? [];
+  /**
+   * Yari dolu aylarin harmanlanmasi: bu donem icin HENUZ gercek ledger
+   * satiri olmayan aktif siteler, gercek kayitlarla AYNI listede silik
+   * "Öngörülen" kart olarak gösterilir (bkz. ProjectedSiteListItem).
+   * Sadece durum filtresi 'all' iken gosterilir — durum filtreleri
+   * (odendi/odenmedi/gecikti) projeksiyonlar icin anlamli degildir.
+   */
+  const missingProjected = useMemo(() => {
+    if (!isCurrentOrFuture || filter !== 'all') return [];
+    const realSiteIds = new Set((ledger.data ?? []).map(r => r.site_id));
+    const data = (projectedSites.data ?? []).filter(s => !realSiteIds.has(s.site_id));
     const q = search.trim().toLocaleLowerCase('tr-TR');
     if (!q) return data;
     return data.filter(s =>
       s.site_name.toLocaleLowerCase('tr-TR').includes(q) ||
       s.site_code.toLocaleLowerCase('tr-TR').includes(q)
     );
-  }, [projectedSites.data, search]);
+  }, [projectedSites.data, ledger.data, isCurrentOrFuture, filter, search]);
 
-  const listData: ListItem[] = isProjectedMode ? projectedRows : rows;
+  const listData: ListItem[] = [...rows, ...missingProjected];
 
   if (!module || (modules.length > 0 && !modules.includes(module))) {
     return (
@@ -168,31 +178,27 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
               />
             ) : null}
             <SearchBar value={search} onChange={setSearch} />
-            {isProjectedMode && (
+            {missingProjected.length > 0 && (
               <Txt variant="tiny" color={c.textFaint}>
-                Öngörülen siteler için durum filtresi/sıralama uygulanmaz; sadece arama yapabilirsiniz.
+                Silik/kesikli kenarlı kartlar henüz gerçek kaydı açılmamış (öngörülen) siteleri gösterir.
               </Txt>
             )}
             <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' }}>
-              {!isProjectedMode && (
-                <>
-                  <View style={{ flex: 1 }}>
-                    <FilterDropdown
-                      value={filter}
-                      options={QUICK_FILTERS}
-                      onChange={setFilter}
-                      counts={counts as any}
-                    />
-                  </View>
-                  <FilterDropdown
-                    value={sortKey}
-                    options={SORT_OPTIONS}
-                    onChange={setSortKey}
-                    compact={{ icon: '⇅', label: 'Sırala' }}
-                    title="Sırala"
-                  />
-                </>
-              )}
+              <View style={{ flex: 1 }}>
+                <FilterDropdown
+                  value={filter}
+                  options={QUICK_FILTERS}
+                  onChange={setFilter}
+                  counts={counts as any}
+                />
+              </View>
+              <FilterDropdown
+                value={sortKey}
+                options={SORT_OPTIONS}
+                onChange={setSortKey}
+                compact={{ icon: '⇅', label: 'Sırala' }}
+                title="Sırala"
+              />
               {canManageSites && (
                 <Pressable
                   onPress={() => setAddSiteOpen(true)}
@@ -202,7 +208,6 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
                     backgroundColor: c.accentSoft,
                     borderRadius: radius.md,
                     opacity: pressed ? 0.7 : 1,
-                    marginLeft: isProjectedMode ? 'auto' : 0,
                   })}
                 >
                   <Txt variant="h3" color={c.accent} style={{ fontWeight: '700' }}>+ Ekle</Txt>
@@ -217,24 +222,22 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
             : <ProjectedSiteListItem site={item} onPress={s => setSelectedProjectedSiteId(s.site_id)} />
         )}
         ListEmptyComponent={
-          ledger.isLoading || (future && projectedSites.isLoading)
+          ledger.isLoading || (isCurrentOrFuture && projectedSites.isLoading)
             ? <Loading label="Liste hazırlanıyor…" />
             : <EmptyState
-                title={search.trim() ? 'Aramayla eşleşen site yok' : isProjectedMode ? 'Bu dönem için öngörülen site yok' : filter === 'all' ? 'Bu dönemde kayıt yok' : 'Bu filtreye uyan kayıt yok'}
+                title={search.trim() ? 'Aramayla eşleşen site yok' : filter === 'all' ? 'Bu dönemde aktif site yok' : 'Bu filtreye uyan kayıt yok'}
                 detail={search.trim()
                   ? 'Farklı bir isim veya kod ile tekrar deneyin.'
-                  : isProjectedMode
-                    ? 'Bu dönemde aktif/uygun site bulunmuyor.'
-                    : filter === 'all'
-                      ? 'Aktif sitelerin bu ayki satırları otomatik açılır. Site tanımlıysa listede görünmeli.'
-                      : 'Farklı bir durum seçerek listeyi genişletebilirsiniz.'}
+                  : filter === 'all'
+                    ? 'Aktif sitelerin bu ayki satırları otomatik açılır. Site tanımlıysa listede görünmeli.'
+                    : 'Farklı bir durum seçerek listeyi genişletebilirsiniz.'}
               />
         }
         ListFooterComponent={
           listData.length > 0 ? (
             <Txt variant="tiny" color={c.textFaint} style={{ textAlign: 'center', marginTop: spacing.md }}>
-              {isProjectedMode
-                ? `${listData.length} öngörülen site`
+              {missingProjected.length > 0
+                ? `${rows.length} kayıt + ${missingProjected.length} öngörülen · en son işlem gören üstte`
                 : `${listData.length} kayıt · en son işlem gören üstte`}
             </Txt>
           ) : null

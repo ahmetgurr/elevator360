@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { usePeriodSummary, useProjectedSummary } from '@/lib/api';
+import { usePeriodSummary, useProjectedSummary, useYearlySummary } from '@/lib/api';
 import { moduleAccent, useTheme } from '@/lib/theme';
 import { currentPeriod, isFuturePeriod } from '@/lib/format';
 import { MODULE_LABEL, type ModuleType } from '@/lib/types';
@@ -21,11 +21,16 @@ export default function ModulePickerScreen() {
   const navigation = useNavigation();
   const autoNavigated = useRef(false);
   const [period, setPeriod] = useState(currentPeriod());
+  const [yearlyOpen, setYearlyOpen] = useState(false);
   const future = isFuturePeriod(period);
+  const year = Number(period.slice(0, 4));
   const elevatorSummary = usePeriodSummary('elevator', period, modules.includes('elevator'));
   const cleaningSummary = usePeriodSummary('cleaning', period, modules.includes('cleaning'));
   const elevatorProjected = useProjectedSummary('elevator', period, modules.includes('elevator') && future);
   const cleaningProjected = useProjectedSummary('cleaning', period, modules.includes('cleaning') && future);
+  // Yillik ozet sadece pop-up acildiginda cekilir (gereksiz sorgu olmasin)
+  const elevatorYearly = useYearlySummary('elevator', year, modules.includes('elevator') && yearlyOpen);
+  const cleaningYearly = useYearlySummary('cleaning', year, modules.includes('cleaning') && yearlyOpen);
   const summaryEntries = [
     { module: 'elevator' as ModuleType, summary: elevatorSummary.data },
     { module: 'cleaning' as ModuleType, summary: cleaningSummary.data },
@@ -33,6 +38,10 @@ export default function ModulePickerScreen() {
   const projectedEntries = [
     { module: 'elevator' as ModuleType, projected: elevatorProjected.data },
     { module: 'cleaning' as ModuleType, projected: cleaningProjected.data },
+  ].filter(e => modules.includes(e.module));
+  const yearlyEntries = [
+    { module: 'elevator' as ModuleType, yearly: elevatorYearly.data },
+    { module: 'cleaning' as ModuleType, yearly: cleaningYearly.data },
   ].filter(e => modules.includes(e.module));
 
   // Tek modul yetkisi varsa secim ekraninda oyalanma, dogrudan listeye gec.
@@ -71,6 +80,11 @@ export default function ModulePickerScreen() {
           loading={elevatorSummary.isLoading || cleaningSummary.isLoading}
           period={period}
           onPeriodChange={setPeriod}
+          yearlyEntries={yearlyEntries}
+          yearlyLoading={elevatorYearly.isLoading || cleaningYearly.isLoading}
+          yearlyOpen={yearlyOpen}
+          onOpenYearly={() => setYearlyOpen(true)}
+          onCloseYearly={() => setYearlyOpen(false)}
         />
       )}
 

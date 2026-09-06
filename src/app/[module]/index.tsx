@@ -209,13 +209,19 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
         ListHeaderComponent={
           <View style={{ gap: spacing.md, marginBottom: spacing.xs }}>
             <PeriodSwitcher period={period} onChange={setPeriod} />
-            {summary.data ? (
-              <SummaryStrip summary={summary.data} />
-            ) : future ? (
+            {future ? (
+              // Gelecek bir donemde -- sitelerden bazilari icin (ornek: erken
+              // girilmis bir ekstra) simdiden gercek satir acilmis olsa bile
+              // -- ozet HER ZAMAN oncelenen (tum aktif siteler) formatinda
+              // gosterilir; aksi halde sadece o birkac satirin kismi verisi
+              // yanlislikla "bu ayin gercek ozeti" gibi gorunur (bkz.
+              // kullanici geri bildirimi: Ekim'de "1 site" yazmasi).
               <ProjectedSummaryCard
                 siteCount={projectedSummary.data?.site_count ?? 0}
                 totalExpected={projectedSummary.data?.total_expected ?? 0}
               />
+            ) : summary.data ? (
+              <SummaryStrip summary={summary.data} />
             ) : null}
             <SearchBar value={search} onChange={setSearch} />
             {missingProjected.length > 0 && (

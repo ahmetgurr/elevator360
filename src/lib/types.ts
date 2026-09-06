@@ -59,13 +59,15 @@ export interface LedgerRow {
 }
 
 /**
- * Gelecek bir donem icin gercek bir islem (ekstra/odeme) HENUZ girilmediyse
- * (entry_count = 0), bu satir "gerciklesmemis" sayilir — base_fee snapshot'i
- * acilmis olsa bile esnafa gercek bir borc/tahsilat gibi gosterilmemelidir.
- * "Zamanı Gelmedi" olarak ele alinir (bkz. LedgerListItem / matchesQuickFilter).
+ * Henuz icinde bulunulmayan (gelecek) bir donem icin satir HER ZAMAN
+ * "gerceklesmemis" sayilir — notu, ekstrasi, gecmisten devreden borcu, hatta
+ * gercek bir islem girilmis olmasi FARK ETMEZ. Esnafa o ay gelene kadar
+ * gercek bir bilanco satiri gibi gorunmemelidir (bkz. kullanici geri
+ * bildirimi: "ne olursa olsun silik/eksikli gorunmeli"). "Zamanı Gelmedi"
+ * olarak ele alinir (bkz. LedgerListItem / matchesQuickFilter).
  */
 export function isUnrealizedFuture(row: LedgerRow): boolean {
-  return isFuturePeriod(row.period) && row.entry_count === 0;
+  return isFuturePeriod(row.period);
 }
 
 /** Bakiye eksiyse (fazla odeme yapilmissa) pozitif "fazla odenen" tutarini dondurur, degilse null */

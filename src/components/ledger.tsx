@@ -34,14 +34,45 @@ export function StatusPill({ statusKey, label, small }: {
 
 export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: LedgerRow) => void }) {
   const { c, spacing, radius } = useTheme();
-  const balance = num(row.balance);
-  const paid = num(row.net_paid);
   // is_active migration'dan once undefined olabilir; bkz. matchesQuickFilter yorumu
   const isActive = row.is_active !== false;
-  // Gelecek bir donem icin henuz gercek islem girilmediyse (bkz. types.ts):
-  // base_fee acilmis olsa bile "Bekliyor/Eksik Odeme" gibi gercek bir borc
-  // statusu YANLIS bir izlenim verir — "Zamanı Gelmedi" olarak gosterilir.
+  // Henuz icinde bulunulmadigimiz (gelecek) bir donem icin: notu, ekstrasi,
+  // gecmisten devreden borcu NE OLURSA OLSUN — gercek bir islem girilmis
+  // olsa bile — esnafa GERCEK bir bilanco satiri gibi gorunmemeli. Diger
+  // "oncelenen" (henuz acilmamis) kartlarla BIREBIR AYNI sade/silik
+  // gorunumde gosterilir (bkz. kullanici geri bildirimi: "Beta sitesi neden
+  // seffaf degil, o da oncelenen degil mi, ne olursa olsun silik gorunmeli").
   const unrealized = isActive && isUnrealizedFuture(row);
+
+  if (unrealized) {
+    return (
+      <Pressable
+        onPress={() => onPress(row)}
+        style={({ pressed }) => ({
+          backgroundColor: pressed ? c.surfaceAlt : c.surface,
+          borderRadius: radius.lg,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: c.border,
+          borderStyle: 'dashed',
+          padding: spacing.lg,
+          gap: spacing.sm,
+          opacity: 0.6,
+        })}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Txt variant="h3" numberOfLines={1}>{row.site_name}</Txt>
+            <Txt variant="tiny" color={c.textFaint}>{row.site_code} · {dayLabel(row.service_day)}</Txt>
+          </View>
+          <StatusPill statusKey="future" label="Zamanı Gelmedi" small />
+        </View>
+        <Amount label="Öngörülen Ücret" value={row.base_fee} color={c.textMuted} />
+      </Pressable>
+    );
+  }
+
+  const balance = num(row.balance);
+  const paid = num(row.net_paid);
   const carriedOver = num(row.carried_over_balance);
   const hasCarriedOverDebt = carriedOver >= 0.01;
   const looksSettled = row.status_key === 'completed' || row.status_key === 'overpaid';
@@ -83,7 +114,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
         borderColor: c.border,
         padding: spacing.lg,
         gap: spacing.sm,
-        opacity: !isActive || unrealized ? 0.6 : 1,
+        opacity: !isActive ? 0.6 : 1,
       })}
     >
       {/* Ust satir: site adi + durum */}
@@ -97,9 +128,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
         </View>
         {!isActive
           ? <StatusPill statusKey="passive" label="Pasif" small />
-          : unrealized
-            ? <StatusPill statusKey="future" label="Zamanı Gelmedi" small />
-            : <StatusPill statusKey={row.status_key} label={row.status_label} small />}
+          : <StatusPill statusKey={row.status_key} label={row.status_label} small />}
       </View>
 
       {/* Alt satir: tutarlar */}
@@ -128,7 +157,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
           esnafi yanlis anlamaya sevk etmesin — bkz. kullanici geri bildirimi.
           Bu ay fazla odeme gecmis borcu kapattiysa/asdiysa, ham negatif
           "Kalan" yerine akilli, net durumu anlatan bir mesaj gosterilir. */}
-      {isActive && !unrealized && carryoverCleared && (
+      {isActive && carryoverCleared && (
         <View style={{
           backgroundColor: c.okSoft, borderRadius: radius.sm,
           paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, alignSelf: 'flex-start',
@@ -138,7 +167,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
           </Txt>
         </View>
       )}
-      {isActive && !unrealized && carryoverStillOwed && (
+      {isActive && carryoverStillOwed && (
         <View style={{
           backgroundColor: c.dangerSoft, borderRadius: radius.sm,
           paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, alignSelf: 'flex-start',
@@ -148,7 +177,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
           </Txt>
         </View>
       )}
-      {isActive && !unrealized && !isOverpaidThisMonth && hasCarriedOverDebt && (
+      {isActive && !isOverpaidThisMonth && hasCarriedOverDebt && (
         <View style={{
           backgroundColor: c.dangerSoft, borderRadius: radius.sm,
           paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, alignSelf: 'flex-start',
@@ -158,13 +187,13 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
           </Txt>
         </View>
       )}
-      {isActive && !unrealized && !hasCarriedOverDebt && !carryoverCleared && looksSettled && (
+      {isActive && !hasCarriedOverDebt && !carryoverCleared && looksSettled && (
         <Txt variant="tiny" color={c.ok}>✓ Geçmişten devreden borcu yok</Txt>
       )}
 
       {/* Gecmis bir ay kartinda olsak bile sitenin BUGUNKU nihai durumu —
           bkz. kullanici geri bildirimi (Bozyel 4 senaryosu) */}
-      {isActive && !unrealized && isPastPeriod && (
+      {isActive && isPastPeriod && (
         <View style={{
           backgroundColor: finalState.kind === 'debt' ? c.dangerSoft : c.okSoft,
           borderRadius: radius.sm,
@@ -279,10 +308,14 @@ export function SummaryStrip({ summary }: { summary: PeriodSummary | null | unde
         </View>
       </View>
 
+      {/* Bu 4 sayi (tamamlandı+eksik+bekliyor+gecikmiş) HER ZAMAN site
+          sayisina esittir — bkz. 0011 migration (birbiriyle kesisen
+          kategoriler yuzunden eskiden toplam tutmuyordu). */}
       <View style={{ flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' }}>
         <Txt variant="tiny" color={c.textFaint}>{summary.site_count} site</Txt>
         <Txt variant="tiny" color={c.ok}>{summary.completed_count} tamamlandı</Txt>
         <Txt variant="tiny" color={c.warn}>{summary.partial_count} eksik</Txt>
+        <Txt variant="tiny" color={c.textMuted}>{summary.pending_count} bekliyor</Txt>
         <Txt variant="tiny" color={c.danger}>{summary.overdue_count} gecikmiş</Txt>
       </View>
     </View>
@@ -380,7 +413,11 @@ export function CashSummaryPanel({
   const [expanded, setExpanded] = useState(false);
 
   const hasAnyRealData = entries.some(e => !!e.summary);
-  const isProjection = !hasAnyRealData && isFuturePeriod(period) && !!projectedEntries;
+  // Gelecek bir donemde bazi siteler icin simdiden gercek satir acilmis olsa
+  // bile (ornek: erken girilmis bir ekstra) panel HER ZAMAN oncelenen
+  // formatta kalir — kismi gercek veri "bu ayin gercek ozeti" gibi
+  // gorunmemeli (bkz. kullanici geri bildirimi).
+  const isProjection = isFuturePeriod(period) && !!projectedEntries;
   const showEmpty = !hasAnyRealData && !isProjection;
 
   const rows: DisplayRow[] = isProjection

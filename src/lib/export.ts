@@ -55,6 +55,7 @@ function buildCsv(rows: LedgerRow[], period: string, summary: PeriodSummary | nu
     lines.push(['Site Sayısı', String(summary.site_count)].map(csvField).join(';'));
     lines.push(['Tamamlanan', String(summary.completed_count)].map(csvField).join(';'));
     lines.push(['Kısmi Ödeme', String(summary.partial_count)].map(csvField).join(';'));
+    lines.push(['Bekliyor', String(summary.pending_count)].map(csvField).join(';'));
     lines.push(['Gecikmiş', String(summary.overdue_count)].map(csvField).join(';'));
   }
 

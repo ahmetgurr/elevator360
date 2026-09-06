@@ -236,6 +236,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                 keyboardType="decimal-pad"
                 value={extraText}
                 onChangeText={setExtraText}
+                maxLength={15}
               />
               <Field
                 label="Tahsil Edilen Tutar (₺)"
@@ -243,6 +244,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                 keyboardType="decimal-pad"
                 value={paymentText}
                 onChangeText={setPaymentText}
+                maxLength={15}
               />
 
               <View style={{ gap: spacing.sm }}>
@@ -276,6 +278,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                 onChangeText={setNoteText}
                 multiline
                 numberOfLines={3}
+                maxLength={4000}
                 style={{ minHeight: 76, textAlignVertical: 'top' }}
               />
 
@@ -540,6 +543,7 @@ function NoteEditModal({ note, siteId, updateNote, onClose, onSaved }: {
                 onChangeText={setText}
                 multiline
                 numberOfLines={4}
+                maxLength={4000}
                 style={{ minHeight: 96, textAlignVertical: 'top' }}
               />
               {updateNote.isError && (

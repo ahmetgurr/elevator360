@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { secureSessionStorage } from './secureStorage';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -18,9 +18,11 @@ const isWeb = Platform.OS === 'web';
 export const supabase = createClient(url, anonKey, {
   auth: {
     // Web'de supabase-js kendi localStorage katmanini kullanir ve sunucu
-    // tarafinda guvenle devre disi kalir. AsyncStorage yalnizca iOS/Android
-    // icin gereklidir; web'de yuklenmesi 'window is not defined' hatasi verir.
-    storage: isWeb ? undefined : AsyncStorage,
+    // tarafinda guvenle devre disi kalir. Native'de (iOS/Android) oturum
+    // token'lari DUZ AsyncStorage yerine SecureStore-tabanli, sifreli bir
+    // katmanda tutulur (bkz. secureStorage.ts — OWASP Mobile M9: Insecure
+    // Data Storage'a karsi).
+    storage: isWeb ? undefined : secureSessionStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: isWeb,

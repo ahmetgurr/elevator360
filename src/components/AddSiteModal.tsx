@@ -96,6 +96,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
                 onChangeText={setName}
                 error={nameError}
                 autoCapitalize="words"
+                maxLength={200}
               />
 
               <View style={{
@@ -113,6 +114,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
                 value={feeText}
                 onChangeText={setFeeText}
                 error={feeError}
+                maxLength={15}
               />
 
               <View style={{ gap: spacing.xs }}>
@@ -130,6 +132,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
                 onChangeText={setNotesText}
                 multiline
                 numberOfLines={3}
+                maxLength={4000}
                 style={{ minHeight: 76, textAlignVertical: 'top' }}
               />
 

@@ -190,6 +190,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                     onChangeText={setName}
                     error={nameError}
                     autoCapitalize="words"
+                    maxLength={200}
                   />
 
                   <Field
@@ -199,6 +200,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                     value={feeText}
                     onChangeText={setFeeText}
                     error={feeError}
+                    maxLength={15}
                     hint={`Bu ücret ${periodLabel(period)} ve sonraki aylara uygulanır; geçmiş ayların bilançosu değişmez.`}
                   />
 
@@ -209,6 +211,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                     onChangeText={setNotesText}
                     multiline
                     numberOfLines={3}
+                    maxLength={4000}
                     style={{ minHeight: 76, textAlignVertical: 'top' }}
                   />
 

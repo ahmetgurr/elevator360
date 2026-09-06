@@ -57,6 +57,7 @@ export default function LoginScreen() {
             keyboardType="email-address"
             placeholder="ornek@firma.com"
             editable={!busy}
+            maxLength={254}
           />
           <Field
             label="Şifre"

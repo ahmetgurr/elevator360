@@ -96,7 +96,7 @@ export function finalBalanceState(siteCurrentBalance: number): FinalBalanceState
  * gruplar halinde birlestirilir. 'overdue' grubu, odeme durumundan
  * bagimsiz olarak suresi gecmis tum kayitlari gosterir; bu yuzden diger
  * gruplarla kesisebilir (ornegin hic odemeyip suresi de gecmis bir kayit
- * hem "Hiç Ödemeyenler" hem "Süresi Geçenler" icinde gorunur).
+ * hem "Hiç Ödemeyenler" hem "Ödeme Süresi Geçenler" icinde gorunur).
  */
 export type QuickFilterKey = 'all' | 'unpaid' | 'partial' | 'overdue' | 'completed' | 'carried_over' | 'passive';
 
@@ -111,8 +111,8 @@ export const QUICK_FILTERS: { key: QuickFilterKey; label: string }[] = [
   { key: 'all',          label: 'Tümü' },
   { key: 'unpaid',       label: 'Hiç Ödemeyenler' },
   { key: 'partial',      label: 'Kısmi Ödeyenler / Eksik' },
-  { key: 'overdue',      label: 'Süresi Geçenler' },
-  { key: 'completed',    label: 'Borcu Bitenler / Tamamlandı' },
+  { key: 'overdue',      label: 'Ödeme Süresi Geçenler' },
+  { key: 'completed',    label: 'Bu Aylık Borcu Bitenler / Tamamlandı' },
   { key: 'carried_over', label: 'Geçmiş Borcu Olanlar' },
   { key: 'passive',      label: 'Pasif Siteler' },
 ];

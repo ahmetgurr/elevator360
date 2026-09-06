@@ -11,6 +11,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.ahmetgur.elevator360",
       "adaptiveIcon": {
         "backgroundColor": "#0B1526",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

@@ -49,6 +49,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   const [requestId, setRequestId] = useState(makeRequestId);
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
   const [editSiteOpen, setEditSiteOpen] = useState(false);
+  const [statementOpen, setStatementOpen] = useState(false);
 
   // Modal yeni bir satir icin acildiginda alanlar ve istek kimligi sifirlanir
   useEffect(() => {
@@ -67,6 +68,14 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
 
   const carriedOverAmount = num(row.carried_over_balance);
   const hasCarriedOver = Math.abs(carriedOverAmount) >= 0.01;
+  // Gecmisten borc VARKEN bu ay fazla odeme girildiyse (bkz. kullanici geri
+  // bildirimi): iki ayri stat (Gecmis Borc / Bu Ay Kalan) yan yana kafa
+  // karistirabilir — net durumu tek, anlasilir bir mesajda birlestiririz.
+  const overpaidThisMonth = num(row.balance) < -0.01;
+  const netAfterCarryover = carriedOverAmount + num(row.balance);
+  const carryoverCleared = carriedOverAmount > 0 && overpaidThisMonth && netAfterCarryover <= 0.01;
+  const carryoverStillOwed = carriedOverAmount > 0 && overpaidThisMonth && netAfterCarryover > 0.01;
+  const extraCreditAfterClear = carryoverCleared && netAfterCarryover < -0.01 ? -netAfterCarryover : 0;
 
   const noteItems: NoteItem[] = [];
   if (currentNotes && currentNotes.trim()) {
@@ -135,6 +144,16 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                 <Txt variant="h3">Hızlı Kayıt</Txt>
                 <Txt variant="small" color={c.textMuted} numberOfLines={1}>{row.site_name}</Txt>
               </View>
+              <Pressable
+                onPress={() => setStatementOpen(true)}
+                hitSlop={8}
+                style={({ pressed }) => ({
+                  paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
+                  borderRadius: radius.sm, backgroundColor: pressed ? c.surfaceAlt : 'transparent',
+                })}
+              >
+                <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>📋 Tüm Ayları Görüntüle</Txt>
+              </Pressable>
               {canEdit && (
                 <Pressable
                   onPress={() => setEditSiteOpen(true)}
@@ -150,7 +169,21 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
             </View>
 
             <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
-              {hasCarriedOver && (
+              {carryoverCleared && (
+                <View style={{ backgroundColor: c.okSoft, borderRadius: radius.md, padding: spacing.md, gap: 2 }}>
+                  <Txt variant="tiny" color={c.ok}>✓ Geçmiş Borç Kapatıldı / Sıfırlandı</Txt>
+                  {extraCreditAfterClear >= 0.01 && (
+                    <Txt variant="small" color={c.ok}>+{money(extraCreditAfterClear)} sonraki aya devreder</Txt>
+                  )}
+                </View>
+              )}
+              {carryoverStillOwed && (
+                <View style={{ backgroundColor: c.dangerSoft, borderRadius: radius.md, padding: spacing.md, gap: 2 }}>
+                  <Txt variant="tiny" color={c.danger}>Bu Ayki Fazla Ödemeye Rağmen Kalan Geçmiş Borç</Txt>
+                  <Txt variant="h3" color={c.danger}>{money(netAfterCarryover)}</Txt>
+                </View>
+              )}
+              {hasCarriedOver && !carryoverCleared && !carryoverStillOwed && (
                 <View style={{
                   backgroundColor: carriedOverAmount > 0 ? c.dangerSoft : c.okSoft,
                   borderRadius: radius.md, padding: spacing.md, gap: 2,
@@ -280,6 +313,82 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
         onClose={() => setEditSiteOpen(false)}
         onSuccess={handleSiteUpdated}
       />
+
+      <SiteStatementModal
+        visible={statementOpen}
+        siteName={row.site_name}
+        currentRow={row}
+        historyRows={history.data ?? []}
+        onClose={() => setStatementOpen(false)}
+      />
+    </Modal>
+  );
+}
+
+/** Siteye ozel cari ekstre: gecmisten bugune tum donemler alt alta bir liste halinde */
+function SiteStatementModal({ visible, siteName, currentRow, historyRows, onClose }: {
+  visible: boolean;
+  siteName: string;
+  currentRow: LedgerRow;
+  historyRows: LedgerRow[];
+  onClose: () => void;
+}) {
+  const { c, spacing, radius } = useTheme();
+  const rows = [currentRow, ...historyRows].slice().sort((a, b) => b.period.localeCompare(a.period));
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, backgroundColor: 'rgba(11,21,38,0.55)', justifyContent: 'center', padding: 24 }}
+      >
+        <Pressable
+          onPress={e => e.stopPropagation()}
+          style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '85%' }}
+        >
+          <View style={{
+            padding: spacing.lg, gap: 2,
+            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+          }}>
+            <Txt variant="h3">Cari Ekstre</Txt>
+            <Txt variant="small" color={c.textMuted} numberOfLines={1}>{siteName}</Txt>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}>
+            {rows.map(r => {
+              const balance = num(r.balance);
+              return (
+                <View
+                  key={r.ledger_id}
+                  style={{
+                    backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md, gap: spacing.xs,
+                    borderWidth: r.ledger_id === currentRow.ledger_id ? 1 : 0,
+                    borderColor: c.accent,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{periodLabel(r.period)}</Txt>
+                    <StatusPill statusKey={r.status_key} label={r.status_label} small />
+                  </View>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+                    <MiniStat label="Aidat" value={r.base_fee} color={c.textMuted} />
+                    {num(r.extra_total) > 0 && <MiniStat label="Ekstra" value={r.extra_total} color={c.warn} />}
+                    <MiniStat label="Ödenen" value={r.net_paid} color={c.ok} />
+                    <MiniStat label="Kalan" value={r.balance} color={balance > 0 ? c.danger : c.ok} />
+                  </View>
+                </View>
+              );
+            })}
+            {rows.length === 0 && (
+              <Txt variant="small" color={c.textFaint}>Bu siteye ait dönem kaydı yok.</Txt>
+            )}
+          </ScrollView>
+
+          <View style={{ padding: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border }}>
+            <Button title="Kapat" variant="secondary" onPress={onClose} />
+          </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

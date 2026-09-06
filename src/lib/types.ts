@@ -128,15 +128,17 @@ export function matchesQuickFilter(row: LedgerRow, key: QuickFilterKey): boolean
  * eslesenleri baş tarafa alir (stabil sort). 'recent' varsayilan ve ayni
  * zamanda "Filtreyi Kaldır" gorevi gorur (DB zaten updated_at desc verir).
  */
-export type SortKey = 'recent' | 'due_asc' | 'due_desc' | 'paid' | 'unpaid' | 'partial';
+export type SortKey = 'recent' | 'due_asc' | 'due_desc' | 'paid' | 'unpaid' | 'partial' | 'alpha_asc' | 'alpha_desc';
 
 export const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'recent',   label: 'Filtreyi Kaldır (En son işlem gören)' },
-  { key: 'due_asc',  label: 'Zamanı önce olanlar' },
-  { key: 'due_desc', label: 'Zamanı sonra olanlar' },
-  { key: 'paid',     label: 'Ödemesi yapılanlar' },
-  { key: 'unpaid',   label: 'Ödemesi yapılmayanlar' },
-  { key: 'partial',  label: 'Eksik ödeme yapanlar' },
+  { key: 'recent',    label: 'Filtreyi Kaldır (En son işlem gören)' },
+  { key: 'due_asc',   label: 'Zamanı önce olanlar' },
+  { key: 'due_desc',  label: 'Zamanı sonra olanlar' },
+  { key: 'paid',      label: 'Ödemesi yapılanlar' },
+  { key: 'unpaid',    label: 'Ödemesi yapılmayanlar' },
+  { key: 'partial',   label: 'Eksik ödeme yapanlar' },
+  { key: 'alpha_asc', label: 'Alfabetik (A-Z)' },
+  { key: 'alpha_desc', label: 'Alfabetik (Z-A)' },
 ];
 
 /** Array.prototype.sort (ES2019+) stabildir: eslesmeyenlerin kendi aralarindaki sira bozulmaz */
@@ -154,6 +156,10 @@ export function sortLedgerRows(rows: LedgerRow[], key: SortKey): LedgerRow[] {
       return arr.sort((a, b) => Number(Number(b.net_paid) === 0) - Number(Number(a.net_paid) === 0));
     case 'partial':
       return arr.sort((a, b) => Number(isPartial(b)) - Number(isPartial(a)));
+    case 'alpha_asc':
+      return arr.sort((a, b) => a.site_name.localeCompare(b.site_name, 'tr'));
+    case 'alpha_desc':
+      return arr.sort((a, b) => b.site_name.localeCompare(a.site_name, 'tr'));
     default:
       return arr;
   }

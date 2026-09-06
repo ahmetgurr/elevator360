@@ -42,6 +42,16 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
   const carriedOver = num(row.carried_over_balance);
   const hasCarriedOverDebt = carriedOver >= 0.01;
   const looksSettled = row.status_key === 'completed' || row.status_key === 'overpaid';
+  // Bu ay fazla odeme (balance negatif) VE gecmisten borc varsa: kartta
+  // ham negatif "Kalan" kafa karistirir (bkz. kullanici geri bildirimi —
+  // "-1.000 ₺" yaziyor ama aslinda gecmis borc kapanmis). Bunun yerine
+  // gercek net durumu (gecmis borc + bu ayki fazla odeme) hesaplayip
+  // "Kapatildi/Sifirlandi" ya da gercek kalan borcu gosteririz.
+  const isOverpaidThisMonth = balance < -0.01;
+  const netAfterCarryover = carriedOver + balance;
+  const carryoverCleared = isOverpaidThisMonth && hasCarriedOverDebt && netAfterCarryover <= 0.01;
+  const carryoverStillOwed = isOverpaidThisMonth && hasCarriedOverDebt && netAfterCarryover > 0.01;
+  const extraCredit = carryoverCleared && netAfterCarryover < -0.01 ? -netAfterCarryover : 0;
 
   return (
     <Pressable
@@ -77,8 +87,10 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
         <Amount label="Toplam" value={row.total_due} color={c.textMuted} />
         <Amount label="Ödenen" value={row.net_paid}
                 color={paid > 0 ? c.ok : c.textFaint} />
-        <Amount label="Kalan" value={row.balance}
-                color={balance > 0 ? c.danger : c.ok} strong />
+        <Amount label="Kalan"
+                value={carryoverCleared ? '0' : carryoverStillOwed ? String(netAfterCarryover) : row.balance}
+                color={carryoverCleared ? c.ok : (carryoverStillOwed ? c.danger : (balance > 0 ? c.danger : c.ok))}
+                strong />
       </View>
 
       {num(row.extra_total) > 0 || num(row.discount_total) > 0 || row.entry_count > 0 ? (
@@ -96,8 +108,30 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
       ) : null}
 
       {/* Kumulatif gecmis borc uyarisi: "Tamamlandı" yazan bir kart bile
-          esnafi yanlis anlamaya sevk etmesin — bkz. kullanici geri bildirimi */}
-      {isActive && !unrealized && hasCarriedOverDebt && (
+          esnafi yanlis anlamaya sevk etmesin — bkz. kullanici geri bildirimi.
+          Bu ay fazla odeme gecmis borcu kapattiysa/asdiysa, ham negatif
+          "Kalan" yerine akilli, net durumu anlatan bir mesaj gosterilir. */}
+      {isActive && !unrealized && carryoverCleared && (
+        <View style={{
+          backgroundColor: c.okSoft, borderRadius: radius.sm,
+          paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, alignSelf: 'flex-start',
+        }}>
+          <Txt variant="tiny" color={c.ok} style={{ fontWeight: '700' }}>
+            ✓ Geçmiş Borç Kapatıldı / Sıfırlandı{extraCredit >= 0.01 ? ` (+${money(extraCredit)} sonraki aya devreder)` : ''}
+          </Txt>
+        </View>
+      )}
+      {isActive && !unrealized && carryoverStillOwed && (
+        <View style={{
+          backgroundColor: c.dangerSoft, borderRadius: radius.sm,
+          paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, alignSelf: 'flex-start',
+        }}>
+          <Txt variant="tiny" color={c.danger} style={{ fontWeight: '700' }}>
+            ⚠ Bu Ayki Fazla Ödemeye Rağmen Kalan Geçmiş Borç: {money(netAfterCarryover)}
+          </Txt>
+        </View>
+      )}
+      {isActive && !unrealized && !isOverpaidThisMonth && hasCarriedOverDebt && (
         <View style={{
           backgroundColor: c.dangerSoft, borderRadius: radius.sm,
           paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, alignSelf: 'flex-start',
@@ -107,7 +141,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
           </Txt>
         </View>
       )}
-      {isActive && !unrealized && !hasCarriedOverDebt && looksSettled && (
+      {isActive && !unrealized && !hasCarriedOverDebt && !carryoverCleared && looksSettled && (
         <Txt variant="tiny" color={c.ok}>✓ Geçmişten devreden borcu yok</Txt>
       )}
     </Pressable>
@@ -475,6 +509,7 @@ function RangeSummaryModal({ visible, modules, onClose }: {
   const { c, dark, spacing, radius } = useTheme();
   const [startPeriod, setStartPeriod] = useState(`${new Date().getFullYear()}-01-01`);
   const [endPeriod, setEndPeriod] = useState(currentPeriod());
+  const [collapsed, setCollapsed] = useState<Partial<Record<ModuleType, boolean>>>({});
 
   const elevatorRange = useRangeSummary('elevator', startPeriod, endPeriod, visible && modules.includes('elevator'));
   const cleaningRange = useRangeSummary('cleaning', startPeriod, endPeriod, visible && modules.includes('cleaning'));
@@ -540,32 +575,64 @@ function RangeSummaryModal({ visible, modules, onClose }: {
                   </View>
                 </View>
 
-                {perModule.map(m => (
-                  <View key={m.module} style={{ gap: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: spacing.md }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                      <View style={{
-                        width: 8, height: 8, borderRadius: 4,
-                        backgroundColor: dark ? moduleAccent[m.module].dark : moduleAccent[m.module].light,
-                      }} />
-                      <Txt variant="h3">{MODULE_LABEL[m.module]}</Txt>
-                      <Txt variant="tiny" color={c.textFaint}>({m.data.length} ay)</Txt>
-                    </View>
+                {perModule.map(m => {
+                  const isCollapsed = collapsed[m.module] ?? false;
+                  const moduleTotals = m.data.reduce(
+                    (acc, p) => {
+                      acc.expected += p.total_expected;
+                      acc.collected += p.total_collected;
+                      acc.balance += p.total_balance;
+                      return acc;
+                    },
+                    { expected: 0, collected: 0, balance: 0 },
+                  );
 
-                    {m.data.length === 0 ? (
-                      <Txt variant="tiny" color={c.textFaint}>Bu aralıkta veri yok.</Txt>
-                    ) : m.data.map(p => (
-                      <View key={p.period} style={{
-                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                        backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md,
-                      }}>
-                        <Txt variant="small" color={c.textMuted} style={{ width: 84 }}>{periodLabel(p.period)}</Txt>
-                        <BreakdownStat label="Beklenen" value={p.total_expected} color={c.textMuted} />
-                        <BreakdownStat label="Tahsil" value={p.total_collected} color={c.ok} />
-                        <BreakdownStat label="Kalan" value={p.total_balance} color={c.danger} />
-                      </View>
-                    ))}
-                  </View>
-                ))}
+                  return (
+                    <View key={m.module} style={{ gap: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: spacing.md }}>
+                      <Pressable
+                        onPress={() => setCollapsed(prev => ({ ...prev, [m.module]: !isCollapsed }))}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
+                      >
+                        <View style={{
+                          width: 8, height: 8, borderRadius: 4,
+                          backgroundColor: dark ? moduleAccent[m.module].dark : moduleAccent[m.module].light,
+                        }} />
+                        <Txt variant="h3" style={{ flex: 1 }}>{MODULE_LABEL[m.module]}</Txt>
+                        <Txt variant="tiny" color={c.textFaint}>({m.data.length} ay)</Txt>
+                        <Txt variant="small" color={c.textFaint}>{isCollapsed ? '▾' : '▴'}</Txt>
+                      </Pressable>
+
+                      {m.data.length > 0 && (
+                        <View style={{
+                          flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md,
+                          backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md,
+                        }}>
+                          <BreakdownStat label="Toplam Beklenen" value={moduleTotals.expected} color={c.textMuted} />
+                          <BreakdownStat label="Toplam Tahsil" value={moduleTotals.collected} color={c.ok} />
+                          <BreakdownStat label="Kalan" value={moduleTotals.balance} color={c.danger} />
+                        </View>
+                      )}
+
+                      {!isCollapsed && (
+                        m.data.length === 0 ? (
+                          <Txt variant="tiny" color={c.textFaint}>Bu aralıkta veri yok.</Txt>
+                        ) : m.data.map(p => (
+                          <View key={p.period} style={{
+                            gap: spacing.xs,
+                            backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md,
+                          }}>
+                            <Txt variant="small" color={c.textMuted} style={{ fontWeight: '700' }}>{periodLabel(p.period)}</Txt>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+                              <BreakdownStat label="Beklenen" value={p.total_expected} color={c.textMuted} />
+                              <BreakdownStat label="Tahsil" value={p.total_collected} color={c.ok} />
+                              <BreakdownStat label="Kalan" value={p.total_balance} color={c.danger} />
+                            </View>
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  );
+                })}
               </>
             )}
           </ScrollView>

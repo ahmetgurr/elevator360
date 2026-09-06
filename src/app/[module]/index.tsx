@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import {
-  fetchCarriedOverBreakdown, useLedger, usePeriodSummary, useProjectedSites, useProjectedSummary,
+  useLedger, usePeriodSummary, useProjectedSites, useProjectedSummary,
   type ProjectedSite,
 } from '@/lib/api';
 import { ModuleThemeProvider, useTheme } from '@/lib/theme';
@@ -58,11 +58,8 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
     if (exporting || data.length === 0) return;
     setExporting(true);
     try {
-      const carriedOverBreakdown = await fetchCarriedOverBreakdown(module, period, data.map(r => r.site_id));
       const fileName = `${MODULE_FILE_LABEL[module] ?? 'Rapor'}_${periodFileLabel(period)}_Raporu`;
-      await exportLedgerCsv(data, fileName, {
-        period, summary: summary.data ?? null, carriedOverBreakdown,
-      });
+      await exportLedgerCsv(data, fileName, { period, summary: summary.data ?? null });
       setToast({ visible: true, variant: 'success', message: 'CSV raporu hazırlandı.' });
     } catch (err) {
       setToast({ visible: true, variant: 'error', message: 'Dışa aktarma başarısız oldu.' });

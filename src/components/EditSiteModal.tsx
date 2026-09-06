@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView, Modal, Platform, Pressable,
-  ScrollView, StyleSheet, View,
+  ScrollView, StyleSheet, View, useWindowDimensions,
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import {
@@ -30,6 +30,11 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
   onSuccess: (message: string) => void;
 }) {
   const { c, spacing, radius } = useTheme();
+  // Android'de yuzdesel maxHeight bazen flex zincirinde guvenilir sekilde
+  // cozumlenmiyor (ScrollView "donuk"/takilarak kaliyor) — bkz. kullanici
+  // geri bildirimi, gercek cihaz/Expo Go testi. Sabit piksel deger daha guvenli.
+  const { height: windowHeight } = useWindowDimensions();
+  const boxMaxHeight = windowHeight * 0.88;
   const site = useSite(visible ? siteId : undefined);
   const mutation = useUpdateSiteDetails();
   const deactivate = useDeactivateSite();
@@ -163,10 +168,13 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
         >
           <Pressable
             onPress={e => e.stopPropagation()}
-            style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '88%' }}
+            style={{
+              backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
+              maxHeight: boxMaxHeight, flexShrink: 1,
+            }}
           >
             <View style={{
-              padding: spacing.lg, gap: 2,
+              padding: spacing.lg, gap: 2, flexShrink: 0,
               borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
             }}>
               <Txt variant="h3">Site Bilgilerini Düzenle</Txt>
@@ -183,7 +191,11 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
               </View>
             ) : (
               <>
-                <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
+                <ScrollView
+                  style={{ flexShrink: 1 }}
+                  contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
+                  keyboardShouldPersistTaps="handled"
+                >
                   {!site.data.is_active && (
                     <View style={{
                       backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md, gap: 2,
@@ -288,7 +300,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                 </ScrollView>
 
                 <View style={{
-                  flexDirection: 'row', gap: spacing.md, padding: spacing.lg,
+                  flexDirection: 'row', gap: spacing.md, padding: spacing.lg, flexShrink: 0,
                   borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
                 }}>
                   <Button title="Vazgeç" variant="secondary" onPress={handleClose}

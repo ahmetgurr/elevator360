@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView, Modal, Platform, Pressable,
-  ScrollView, StyleSheet, View,
+  ScrollView, StyleSheet, View, useWindowDimensions,
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { usePostTransaction, useSiteHistory, useUpdateNote } from '@/lib/api';
-import { currentPeriod, money, num, parseAmount, periodLabel } from '@/lib/format';
+import { currentPeriod, money, num, parseAmount, periodFileLabel, periodLabel } from '@/lib/format';
+import { exportSiteStatementCsv } from '@/lib/export';
 import { finalBalanceState, overpaidAmount, type LedgerRow, type ModuleType } from '@/lib/types';
 import { StatusPill } from './ledger';
 import { EditSiteModal } from './EditSiteModal';
@@ -44,6 +45,11 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   onOpenStatement: (siteName: string, currentRow: LedgerRow, historyRows: LedgerRow[]) => void;
 }) {
   const { c, spacing, radius } = useTheme();
+  // Android'de yuzdesel maxHeight bazen flex zincirinde guvenilir sekilde
+  // cozumlenmiyor (ScrollView "donuk" kaliyor) — bkz. kullanici geri
+  // bildirimi, gercek cihaz/Expo Go testi. Sabit piksel deger daha guvenli.
+  const { height: windowHeight } = useWindowDimensions();
+  const boxMaxHeight = windowHeight * 0.88;
   const visible = !!row;
   const mutation = usePostTransaction(module, period);
   const updateNote = useUpdateNote(module, period);
@@ -149,7 +155,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
             onPress={e => e.stopPropagation()}
             style={{
               backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
-              maxHeight: '88%', flexShrink: 1,
+              maxHeight: boxMaxHeight, flexShrink: 1,
             }}
           >
             <View style={{
@@ -371,12 +377,33 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
   onClose: () => void;
 }) {
   const { c, spacing, radius } = useTheme();
+  // Android'de yuzdesel maxHeight bazen flex zincirinde guvenilir sekilde
+  // cozumlenmiyor (ScrollView "donuk" kaliyor) — bkz. kullanici geri
+  // bildirimi, gercek cihaz/Expo Go testi. Sabit piksel deger daha guvenli.
+  const { height: windowHeight } = useWindowDimensions();
+  const boxMaxHeight = windowHeight * 0.85;
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   if (!currentRow) return null;
   const rows = [currentRow, ...historyRows].slice().sort((a, b) => b.period.localeCompare(a.period));
   // Site duzeyinde: hangi donem satirina bakilirsa bakilsin AYNI deger —
   // sitenin BUGUNE kadarki nihai net bakiyesi (bkz. kullanici geri bildirimi,
   // Bozyel 4 senaryosu: gecmis kirmizilarin bugune yansiyan toplami).
   const finalState = finalBalanceState(num(currentRow.site_current_balance));
+
+  async function handleExport() {
+    if (exporting || rows.length === 0) return;
+    setExporting(true);
+    setExportError('');
+    try {
+      const fileName = `${siteName.replace(/[^\p{L}\p{N}]+/gu, '_')}_Cari_Ekstre_${periodFileLabel(currentRow!.period)}`;
+      await exportSiteStatementCsv(rows, siteName, fileName);
+    } catch (err) {
+      setExportError('Dışa aktarma başarısız oldu.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -388,17 +415,35 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
           onPress={e => e.stopPropagation()}
           style={{
             backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
-            maxHeight: '85%', flexShrink: 1,
+            maxHeight: boxMaxHeight, flexShrink: 1,
           }}
         >
           <View style={{
             padding: spacing.lg, gap: spacing.sm, flexShrink: 0,
             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
           }}>
-            <View style={{ gap: 2 }}>
-              <Txt variant="h3">Cari Ekstre</Txt>
-              <Txt variant="small" color={c.textMuted} numberOfLines={1}>{siteName}</Txt>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt variant="h3">Cari Ekstre</Txt>
+                <Txt variant="small" color={c.textMuted} numberOfLines={1}>{siteName}</Txt>
+              </View>
+              <Pressable
+                onPress={handleExport}
+                disabled={exporting || rows.length === 0}
+                hitSlop={8}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  backgroundColor: c.accentSoft, borderRadius: radius.pill,
+                  paddingVertical: 6, paddingHorizontal: 12,
+                  opacity: rows.length === 0 ? 0.4 : pressed ? 0.7 : 1,
+                })}
+              >
+                <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>
+                  {exporting ? '…' : '⬇︎ Dışa Aktar'}
+                </Txt>
+              </Pressable>
             </View>
+            {!!exportError && <Txt variant="tiny" color={c.danger}>{exportError}</Txt>}
             <View style={{
               backgroundColor: finalState.kind === 'debt' ? c.dangerSoft : c.okSoft,
               borderRadius: radius.md, padding: spacing.md, gap: 2,

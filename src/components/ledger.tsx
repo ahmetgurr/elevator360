@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { moduleAccent, statusColors, useTheme } from '@/lib/theme';
 import { currentPeriod, dayLabel, isFuturePeriod, money, moneyShort, num, periodLabel } from '@/lib/format';
 import {
@@ -543,6 +543,13 @@ function RangeSummaryModal({ visible, modules, onClose }: {
   onClose: () => void;
 }) {
   const { c, dark, spacing, radius } = useTheme();
+  // Android'de yuzdesel maxHeight ('85%'), Pressable/View flex zincirinde
+  // guvenilir sekilde cozumlenmeyebiliyor — ScrollView kendi boyunu
+  // kucultemeyip "scroll donuk" kalabiliyor (bkz. kullanici geri bildirimi,
+  // gercek cihaz/Expo Go testi). Sabit piksel deger (useWindowDimensions)
+  // kullanmak platformdan bagimsiz, garanti bir sinir verir.
+  const { height: windowHeight } = useWindowDimensions();
+  const boxMaxHeight = windowHeight * 0.85;
   const [startPeriod, setStartPeriod] = useState(`${new Date().getFullYear()}-01-01`);
   const [endPeriod, setEndPeriod] = useState(currentPeriod());
   const [collapsed, setCollapsed] = useState<Partial<Record<ModuleType, boolean>>>({});
@@ -579,7 +586,7 @@ function RangeSummaryModal({ visible, modules, onClose }: {
           onPress={e => e.stopPropagation()}
           style={{
             backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
-            maxHeight: '85%', flexShrink: 1,
+            maxHeight: boxMaxHeight, flexShrink: 1,
           }}
         >
           <View style={{
@@ -645,14 +652,27 @@ function RangeSummaryModal({ visible, modules, onClose }: {
                         <Txt variant="small" color={c.textFaint}>{isCollapsed ? '▾' : '▴'}</Txt>
                       </Pressable>
 
+                      {/* Modul toplami OZET karti: alttaki tekil ay kartlarindan (bkz.
+                          asagida) KESINLIKLE farkli gorunmeli — esnaf "bu bir aylik
+                          kayit degil, genel toplam" diye bir bakista ayirt edebilsin.
+                          Modul rengiyle vurgulu arkaplan + kalin cerceve + "ÖZET"
+                          rozeti (bkz. kullanici geri bildirimi). */}
                       {m.data.length > 0 && (
                         <View style={{
-                          flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md,
-                          backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md,
+                          gap: spacing.xs,
+                          backgroundColor: dark ? moduleAccent[m.module].darkSoft : moduleAccent[m.module].lightSoft,
+                          borderRadius: radius.md, padding: spacing.md,
+                          borderWidth: 1.5,
+                          borderColor: dark ? moduleAccent[m.module].dark : moduleAccent[m.module].light,
                         }}>
-                          <BreakdownStat label="Toplam Beklenen" value={moduleTotals.expected} color={c.textMuted} />
-                          <BreakdownStat label="Toplam Tahsil" value={moduleTotals.collected} color={c.ok} />
-                          <BreakdownStat label="Kalan" value={moduleTotals.balance} color={c.danger} />
+                          <Txt variant="tiny" color={dark ? moduleAccent[m.module].dark : moduleAccent[m.module].light} style={{ fontWeight: '800', letterSpacing: 0.5 }}>
+                            📊 TOPLAM ÖZET · SEÇİLİ ARALIK
+                          </Txt>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+                            <BreakdownStat label="Toplam Beklenen" value={moduleTotals.expected} color={c.textMuted} />
+                            <BreakdownStat label="Toplam Tahsil" value={moduleTotals.collected} color={c.ok} />
+                            <BreakdownStat label="Kalan" value={moduleTotals.balance} color={c.danger} />
+                          </View>
                         </View>
                       )}
 

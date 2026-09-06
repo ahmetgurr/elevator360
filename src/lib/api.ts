@@ -496,41 +496,6 @@ export function useUpdateNote(module: ModuleType, period: string) {
   });
 }
 
-export interface CarriedOverBreakdownEntry {
-  period: string;
-  balance: number;
-}
-
-/**
- * CSV disa aktarim icin: verilen siteler'in, exportedPeriod'DAN ONCEKI
- * (acik bakiyesi > 0 olan) her donemini AYRI AYRI dondurur — "06.2026'dan
- * 4.000₺, 07.2026'dan 2.000₺ borcu bulunmaktadır" gibi bir hatirlatma
- * metni olusturmak icin. TEK sorguda tum siteler icin cekilir (N+1 yok).
- * Bir react-query hook'u DEGILDIR — export butonuna basildiginda bir kez
- * cagrilan imperatif bir yardimcidir.
- */
-export async function fetchCarriedOverBreakdown(
-  module: ModuleType, exportedPeriod: string, siteIds: string[]
-): Promise<Record<string, CarriedOverBreakdownEntry[]>> {
-  const out: Record<string, CarriedOverBreakdownEntry[]> = {};
-  if (siteIds.length === 0) return out;
-
-  const { data, error } = await supabase
-    .from('v_ledger')
-    .select('site_id, period, balance')
-    .eq('module', module)
-    .lt('period', exportedPeriod)
-    .gt('balance', 0)
-    .in('site_id', siteIds)
-    .order('period', { ascending: true });
-  if (error) throw new Error(error.message);
-
-  for (const r of (data ?? []) as { site_id: string; period: string; balance: string }[]) {
-    (out[r.site_id] ??= []).push({ period: r.period, balance: num(r.balance) });
-  }
-  return out;
-}
-
 /* ------------------------------------------------------------------ */
 /* Hizli kayit                                                         */
 /* ------------------------------------------------------------------ */

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  ActivityIndicator, Animated, Modal, Pressable, StyleSheet, Text, TextInput,
-  TextInputProps, View, ViewStyle,
+  ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput,
+  TextInputProps, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
 
@@ -176,6 +176,61 @@ export function Toast({ visible, message, variant = 'success', onHide }: {
       <Text style={[font.h3, { color: '#FFFFFF' }]}>{variant === 'success' ? '✓' : '!'}</Text>
       <Text style={[font.body, { color: '#FFFFFF', flex: 1 }]}>{message}</Text>
     </Animated.View>
+  );
+}
+
+/* ------------------------------ Modal kabuğu ------------------------------ */
+
+/**
+ * Kaydırılabilir icerikli TUM modallarin ortak govdesi. "Dışına dokunarak
+ * kapatma" backdrop'ı, içerik kutusunun bir Pressable ÇOCUĞU DEĞİL, aynı
+ * katmandaki AYRI bir sibling olarak durur (pointerEvents="box-none" ile
+ * içerik dışındaki boş alanlardan backdrop'a "sızması" sağlanır). Böylece
+ * içerik kutusundaki ScrollView, dokunma/kaydırma responder'ını hiçbir üst
+ * Pressable ile paylaşmak zorunda kalmaz.
+ *
+ * Bu, kullanıcı geri bildirimindeki "normal hızda kaydırma donuk kalıyor,
+ * sadece sert/hızlı kaydırınca tepki veriyor" sorununun kök nedeniydi:
+ * eski yapıda ScrollView bir Pressable'ın (içerik kutusu) doğrudan çocuğuydu;
+ * Pressable, dokunuşun "tık mı yoksa kaydırma mı" olduğuna yavaş/küçük
+ * hareketlerde geç karar veriyor, bu da ScrollView'ın responder'ı hemen
+ * devralmasını engelliyordu. Yalnızca hızlı/büyük hareketler eşiği hemen
+ * aşıp Pressable'ı erken serbest bıraktığı için "sert kaydırma çalışıyor"
+ * gibi görünüyordu.
+ */
+export function ModalShell({ visible, onClose, keyboardAvoiding, maxHeightRatio = 0.85, children }: {
+  visible: boolean;
+  onClose: () => void;
+  /** iOS'ta klavye açıldığında içeriğin yukarı kayması gerekiyorsa */
+  keyboardAvoiding?: boolean;
+  /** İçerik kutusunun ekran yüksekliğinin yüzde kaçını aşamayacağı (Android'de yüzdesel maxHeight güvenilir çözümlenmeyebiliyor — bkz. kullanıcı geri bildirimi; bu yüzden sabit piksele çevrilir) */
+  maxHeightRatio?: number;
+  children: React.ReactNode;
+}) {
+  const { c, spacing, radius } = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
+  const Wrapper: any = keyboardAvoiding ? KeyboardAvoidingView : View;
+  const wrapperProps = keyboardAvoiding
+    ? { behavior: Platform.OS === 'ios' ? ('padding' as const) : undefined, style: { flex: 1 } }
+    : { style: { flex: 1 } };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Wrapper {...wrapperProps}>
+        <Pressable
+          onPress={onClose}
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(11,21,38,0.55)' }]}
+        />
+        <View pointerEvents="box-none" style={{ flex: 1, justifyContent: 'center', padding: spacing.xl }}>
+          <View style={{
+            backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
+            maxHeight: windowHeight * maxHeightRatio, flexShrink: 1,
+          }}>
+            {children}
+          </View>
+        </View>
+      </Wrapper>
+    </Modal>
   );
 }
 

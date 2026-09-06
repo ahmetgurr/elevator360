@@ -100,18 +100,6 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation, module, exporting, hasRows, c.accent, c.accentSoft, c.headerBg, c.headerText, radius.pill]);
 
-  // Filtre secenegi basina kayit sayisi (dropdown'da gosterilir)
-  // NOT: 'all' icin de matchesQuickFilter cagrilir — artik "Tumu" pasif
-  // siteleri DISLIYOR (bkz. types.ts), bu yuzden kisayol kullanilamaz.
-  const counts = useMemo(() => {
-    const data = ledger.data ?? [];
-    const out: Record<string, number> = {};
-    for (const f of QUICK_FILTERS) {
-      out[f.key] = data.filter(r => matchesQuickFilter(r, f.key)).length;
-    }
-    return out;
-  }, [ledger.data]);
-
   const rows = useMemo(() => {
     const data = ledger.data ?? [];
     const byFilter = data.filter(r => matchesQuickFilter(r, filter));
@@ -142,7 +130,55 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
     );
   }, [projectedSites.data, ledger.data, isCurrentOrFuture, filter, search]);
 
-  const listData: ListItem[] = [...rows, ...missingProjected];
+  /**
+   * Pasif (sozlesmesi feshedilmis) siteler "Tumu" disindaki hicbir filtrede
+   * gorunmez; "Tumu" secildiğinde ise aktif site sayisina/siralamaya KARIŞMADAN
+   * listenin EN ALTINA, soluk/pasif tasarimiyla (LedgerListItem zaten
+   * !isActive satirlari boyle gosteriyor) iliştirilir (bkz. kullanici geri
+   * bildirimi). Bu yuzden 'rows'/'counts' hesaplarindan tamamen ayri tutulur.
+   */
+  const passiveRows = useMemo(() => {
+    if (filter !== 'all') return [];
+    const data = (ledger.data ?? []).filter(r => matchesQuickFilter(r, 'passive'));
+    const q = search.trim().toLocaleLowerCase('tr-TR');
+    const bySearch = !q ? data : data.filter(r =>
+      r.site_name.toLocaleLowerCase('tr-TR').includes(q) ||
+      r.site_code.toLocaleLowerCase('tr-TR').includes(q)
+    );
+    return sortLedgerRows(bySearch, sortKey);
+  }, [ledger.data, filter, search, sortKey]);
+
+  // Filtre secenegi basina site sayisi (dropdown'da gosterilir). 'all' icin
+  // sadece gercek satirlar degil, henuz acilmamis (oncelenen) aktif siteler
+  // de sayilir — esnaf "Tumu"nde TOPLAM aktif site sayisini gormek istiyor
+  // (bkz. kullanici geri bildirimi). Pasif siteler bu sayima KESINLIKLE dahil
+  // edilmez (ayrica 'passive' anahtari zaten kendi gercek sayisini tasir).
+  const counts = useMemo(() => {
+    const data = ledger.data ?? [];
+    const out: Record<string, number> = {};
+    for (const f of QUICK_FILTERS) {
+      out[f.key] = data.filter(r => matchesQuickFilter(r, f.key)).length;
+    }
+    out.all += missingProjected.length;
+    return out;
+  }, [ledger.data, missingProjected]);
+
+  /**
+   * Alfabetik siralama, sadece gercek satirlari degil EKRANDA GORUNEN tum
+   * aktif harmani (gercek + oncelenen) uzerinden calismali (bkz. kullanici
+   * geri bildirimi) — bu yuzden 'rows' zaten kendi icinde sirali olsa da,
+   * alfabetik anahtarlarda iki grup BIRLIKTE yeniden siralanir. Diger
+   * siralama anahtarlari (vade/odeme durumu) oncelenen kartlar icin anlamli
+   * veri tasimadigindan onlar icin oncelenenler sondaki sirada kalir.
+   */
+  const activeBlend: ListItem[] = useMemo(() => {
+    const combined: ListItem[] = [...rows, ...missingProjected];
+    if (sortKey === 'alpha_asc') return [...combined].sort((a, b) => a.site_name.localeCompare(b.site_name, 'tr'));
+    if (sortKey === 'alpha_desc') return [...combined].sort((a, b) => b.site_name.localeCompare(a.site_name, 'tr'));
+    return combined;
+  }, [rows, missingProjected, sortKey]);
+
+  const listData: ListItem[] = [...activeBlend, ...passiveRows];
 
   if (!module || (modules.length > 0 && !modules.includes(module))) {
     return (
@@ -240,9 +276,13 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
         ListFooterComponent={
           listData.length > 0 ? (
             <Txt variant="tiny" color={c.textFaint} style={{ textAlign: 'center', marginTop: spacing.md }}>
-              {missingProjected.length > 0
-                ? `${rows.length} kayıt + ${missingProjected.length} öngörülen · en son işlem gören üstte`
-                : `${listData.length} kayıt · en son işlem gören üstte`}
+              {missingProjected.length > 0 || passiveRows.length > 0
+                ? [
+                    `${rows.length} site`,
+                    missingProjected.length > 0 ? `${missingProjected.length} öngörülen` : null,
+                    passiveRows.length > 0 ? `${passiveRows.length} pasif` : null,
+                  ].filter(Boolean).join(' + ') + ' · en son işlem gören üstte'
+                : `${listData.length} site · en son işlem gören üstte`}
             </Txt>
           ) : null
         }

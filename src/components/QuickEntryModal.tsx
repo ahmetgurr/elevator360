@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView, Modal, Platform, Pressable,
-  ScrollView, StyleSheet, View, useWindowDimensions,
-} from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { usePostTransaction, useSiteHistory, useUpdateNote } from '@/lib/api';
 import { currentPeriod, money, num, parseAmount, periodFileLabel, periodLabel } from '@/lib/format';
@@ -10,7 +7,7 @@ import { exportSiteStatementCsv } from '@/lib/export';
 import { finalBalanceState, overpaidAmount, type LedgerRow, type ModuleType } from '@/lib/types';
 import { StatusPill } from './ledger';
 import { EditSiteModal } from './EditSiteModal';
-import { Button, ConfirmModal, Field, Txt } from './ui';
+import { Button, ConfirmModal, Field, ModalShell, Txt } from './ui';
 
 /** Cift dokunma kalkani: modal her acildiginda benzersiz bir istek kimligi uretilir */
 function makeRequestId(): string {
@@ -45,11 +42,6 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   onOpenStatement: (siteName: string, currentRow: LedgerRow, historyRows: LedgerRow[]) => void;
 }) {
   const { c, spacing, radius } = useTheme();
-  // Android'de yuzdesel maxHeight bazen flex zincirinde guvenilir sekilde
-  // cozumlenmiyor (ScrollView "donuk" kaliyor) — bkz. kullanici geri
-  // bildirimi, gercek cihaz/Expo Go testi. Sabit piksel deger daha guvenli.
-  const { height: windowHeight } = useWindowDimensions();
-  const boxMaxHeight = windowHeight * 0.88;
   const visible = !!row;
   const mutation = usePostTransaction(module, period);
   const updateNote = useUpdateNote(module, period);
@@ -142,22 +134,8 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        <Pressable
-          onPress={handleClose}
-          style={{ flex: 1, backgroundColor: 'rgba(11,21,38,0.55)', justifyContent: 'center', padding: spacing.xl }}
-        >
-          <Pressable
-            onPress={e => e.stopPropagation()}
-            style={{
-              backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
-              maxHeight: boxMaxHeight, flexShrink: 1,
-            }}
-          >
+    <>
+    <ModalShell visible={visible} onClose={handleClose} keyboardAvoiding maxHeightRatio={0.88}>
             <View style={{
               padding: spacing.lg, flexShrink: 0,
               borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
@@ -335,10 +313,11 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
               <Button title="Kaydet" onPress={handleSave}
                       loading={mutation.isPending} style={{ flex: 1 }} />
             </View>
-          </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
+    </ModalShell>
 
+      {/* Modal-icinde-Modal yerlestirmesinden kacinilir (bkz. ModalShell yorumu) —
+          bu yuzden NoteEditModal/EditSiteModal artik ModalShell'in DISINDA,
+          fragment icinde SIBLING olarak render edilir. */}
       <NoteEditModal
         note={editingNote}
         onClose={() => setEditingNote(null)}
@@ -358,7 +337,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
         onClose={() => setEditSiteOpen(false)}
         onSuccess={handleSiteUpdated}
       />
-    </Modal>
+    </>
   );
 }
 
@@ -377,11 +356,6 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
   onClose: () => void;
 }) {
   const { c, spacing, radius } = useTheme();
-  // Android'de yuzdesel maxHeight bazen flex zincirinde guvenilir sekilde
-  // cozumlenmiyor (ScrollView "donuk" kaliyor) — bkz. kullanici geri
-  // bildirimi, gercek cihaz/Expo Go testi. Sabit piksel deger daha guvenli.
-  const { height: windowHeight } = useWindowDimensions();
-  const boxMaxHeight = windowHeight * 0.85;
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
   if (!currentRow) return null;
@@ -406,18 +380,7 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        onPress={onClose}
-        style={{ flex: 1, backgroundColor: 'rgba(11,21,38,0.55)', justifyContent: 'center', padding: 24 }}
-      >
-        <Pressable
-          onPress={e => e.stopPropagation()}
-          style={{
-            backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
-            maxHeight: boxMaxHeight, flexShrink: 1,
-          }}
-        >
+    <ModalShell visible={visible} onClose={onClose} maxHeightRatio={0.85}>
           <View style={{
             padding: spacing.lg, gap: spacing.sm, flexShrink: 0,
             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
@@ -497,9 +460,7 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
           <View style={{ padding: spacing.lg, flexShrink: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border }}>
             <Button title="Kapat" variant="secondary" onPress={onClose} />
           </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    </ModalShell>
   );
 }
 

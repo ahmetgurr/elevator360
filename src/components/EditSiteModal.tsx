@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView, Modal, Platform, Pressable,
-  ScrollView, StyleSheet, View, useWindowDimensions,
-} from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import {
   useDeactivateSite, useReactivateSite, useSetSiteStartPeriod, useSite, useUpdateSiteDetails,
@@ -10,7 +7,7 @@ import {
 import { currentPeriod, num, parseAmount, periodLabel, shiftPeriod } from '@/lib/format';
 import type { ModuleType } from '@/lib/types';
 import { PeriodSwitcher } from './pickers';
-import { Button, ConfirmModal, Field, Loading, Txt } from './ui';
+import { Button, ConfirmModal, Field, Loading, ModalShell, Txt } from './ui';
 
 /**
  * Site adi / aylik sabit ucret duzenleme + sozlesme feshi (pasife alma)
@@ -30,11 +27,6 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
   onSuccess: (message: string) => void;
 }) {
   const { c, spacing, radius } = useTheme();
-  // Android'de yuzdesel maxHeight bazen flex zincirinde guvenilir sekilde
-  // cozumlenmiyor (ScrollView "donuk"/takilarak kaliyor) — bkz. kullanici
-  // geri bildirimi, gercek cihaz/Expo Go testi. Sabit piksel deger daha guvenli.
-  const { height: windowHeight } = useWindowDimensions();
-  const boxMaxHeight = windowHeight * 0.88;
   const site = useSite(visible ? siteId : undefined);
   const mutation = useUpdateSiteDetails();
   const deactivate = useDeactivateSite();
@@ -157,22 +149,8 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        <Pressable
-          onPress={handleClose}
-          style={{ flex: 1, backgroundColor: 'rgba(11,21,38,0.55)', justifyContent: 'center', padding: spacing.xl }}
-        >
-          <Pressable
-            onPress={e => e.stopPropagation()}
-            style={{
-              backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
-              maxHeight: boxMaxHeight, flexShrink: 1,
-            }}
-          >
+    <>
+    <ModalShell visible={visible} onClose={handleClose} keyboardAvoiding maxHeightRatio={0.88}>
             <View style={{
               padding: spacing.lg, gap: 2, flexShrink: 0,
               borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
@@ -310,9 +288,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                 </View>
               </>
             )}
-          </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
+    </ModalShell>
 
       {!!site.data && (
         <>
@@ -339,6 +315,6 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
           />
         </>
       )}
-    </Modal>
+    </>
   );
 }

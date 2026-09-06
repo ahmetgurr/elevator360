@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { moduleAccent, statusColors, useTheme } from '@/lib/theme';
 import { currentPeriod, dayLabel, isFuturePeriod, money, moneyShort, num, periodLabel } from '@/lib/format';
 import {
@@ -8,7 +8,7 @@ import {
 } from '@/lib/types';
 import { useRangeSummary, type ProjectedSite, type RangePeriodSummary } from '@/lib/api';
 import { PeriodSwitcher } from './pickers';
-import { Txt } from './ui';
+import { ModalShell, Txt } from './ui';
 
 /* ------------------------------ Durum rozeti ---------------------------- */
 
@@ -543,13 +543,6 @@ function RangeSummaryModal({ visible, modules, onClose }: {
   onClose: () => void;
 }) {
   const { c, dark, spacing, radius } = useTheme();
-  // Android'de yuzdesel maxHeight ('85%'), Pressable/View flex zincirinde
-  // guvenilir sekilde cozumlenmeyebiliyor — ScrollView kendi boyunu
-  // kucultemeyip "scroll donuk" kalabiliyor (bkz. kullanici geri bildirimi,
-  // gercek cihaz/Expo Go testi). Sabit piksel deger (useWindowDimensions)
-  // kullanmak platformdan bagimsiz, garanti bir sinir verir.
-  const { height: windowHeight } = useWindowDimensions();
-  const boxMaxHeight = windowHeight * 0.85;
   const [startPeriod, setStartPeriod] = useState(`${new Date().getFullYear()}-01-01`);
   const [endPeriod, setEndPeriod] = useState(currentPeriod());
   const [collapsed, setCollapsed] = useState<Partial<Record<ModuleType, boolean>>>({});
@@ -577,18 +570,7 @@ function RangeSummaryModal({ visible, modules, onClose }: {
   );
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        onPress={onClose}
-        style={{ flex: 1, backgroundColor: 'rgba(11,21,38,0.55)', justifyContent: 'center', padding: spacing.xl }}
-      >
-        <Pressable
-          onPress={e => e.stopPropagation()}
-          style={{
-            backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
-            maxHeight: boxMaxHeight, flexShrink: 1,
-          }}
-        >
+    <ModalShell visible={visible} onClose={onClose} maxHeightRatio={0.85}>
           <View style={{
             padding: spacing.lg, gap: spacing.md, flexShrink: 0,
             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
@@ -699,9 +681,7 @@ function RangeSummaryModal({ visible, modules, onClose }: {
               </>
             )}
           </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    </ModalShell>
   );
 }
 

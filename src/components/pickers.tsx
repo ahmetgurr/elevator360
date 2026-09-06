@@ -78,15 +78,15 @@ export function FilterDropdown<T extends string>({
         <Pressable
           onPress={() => setOpen(true)}
           style={({ pressed }) => ({
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm,
             backgroundColor: pressed ? c.surfaceAlt : c.surface,
             borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
             borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
           })}
         >
-          <Txt variant="h3">{current.label}</Txt>
-          <Txt variant="small" color={c.textMuted}>
-            {counts?.[value] !== undefined ? `${counts[value]} kayıt  ▾` : '▾'}
+          <Txt variant="h3" style={{ flex: 1 }} numberOfLines={1}>{current.label}</Txt>
+          <Txt variant="small" color={c.textMuted} numberOfLines={1} style={{ flexShrink: 0 }}>
+            {counts?.[value] !== undefined ? `${counts[value]} site  ▾` : '▾'}
           </Txt>
         </Pressable>
       )}

@@ -1,14 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView, Modal, Platform, Pressable,
-  ScrollView, StyleSheet, View,
-} from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { useCreateSite } from '@/lib/api';
 import { currentPeriod, parseAmount, periodLabel } from '@/lib/format';
 import { MODULE_LABEL, type ModuleType } from '@/lib/types';
 import { PeriodSwitcher } from './pickers';
-import { Button, Field, Txt } from './ui';
+import { Button, Field, ModalShell, Txt } from './ui';
 
 /**
  * Yeni site/apartman ekleme formu. Modul tipi ekrandan miras alinir
@@ -78,28 +75,20 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        <Pressable
-          onPress={handleClose}
-          style={{ flex: 1, backgroundColor: 'rgba(11,21,38,0.55)', justifyContent: 'center', padding: spacing.xl }}
-        >
-          <Pressable
-            onPress={e => e.stopPropagation()}
-            style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '88%' }}
-          >
+    <ModalShell visible={visible} onClose={handleClose} keyboardAvoiding maxHeightRatio={0.88}>
             <View style={{
-              padding: spacing.lg, gap: 2,
+              padding: spacing.lg, gap: 2, flexShrink: 0,
               borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
             }}>
               <Txt variant="h3">Yeni Site / Apartman Ekle</Txt>
               <Txt variant="small" color={c.textMuted}>{MODULE_LABEL[module]} listesine eklenecek</Txt>
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={{ flexShrink: 1 }}
+              contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
+              keyboardShouldPersistTaps="handled"
+            >
               <Field
                 label="Sitenin / Apartmanın Adı"
                 placeholder="Örn: Yeşil Vadi Sitesi"
@@ -150,7 +139,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
             </ScrollView>
 
             <View style={{
-              flexDirection: 'row', gap: spacing.md, padding: spacing.lg,
+              flexDirection: 'row', gap: spacing.md, padding: spacing.lg, flexShrink: 0,
               borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
             }}>
               <Button title="Vazgeç" variant="secondary" onPress={handleClose}
@@ -158,9 +147,6 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
               <Button title="Kaydet" onPress={handleSave}
                       loading={mutation.isPending} style={{ flex: 1 }} />
             </View>
-          </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
-    </Modal>
+    </ModalShell>
   );
 }

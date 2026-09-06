@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { useCarriedOverBalance, usePostTransaction, useSiteHistory, useUpdateNote } from '@/lib/api';
-import { money, num, periodLabel } from '@/lib/format';
+import { money, num, parseAmount, periodLabel } from '@/lib/format';
 import type { LedgerRow, ModuleType } from '@/lib/types';
 import { StatusPill } from './ledger';
 import { Button, ConfirmModal, Field, Txt } from './ui';
@@ -13,14 +13,6 @@ import { Button, ConfirmModal, Field, Txt } from './ui';
 /** Cift dokunma kalkani: modal her acildiginda benzersiz bir istek kimligi uretilir */
 function makeRequestId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** Kullanicinin virgul/nokta ile girdigi tutari sayiya cevirir; bos deger 0 kabul edilir */
-function parseAmount(text: string): number {
-  if (!text.trim()) return 0;
-  const normalized = text.replace(',', '.').replace(/[^0-9.]/g, '');
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : 0;
 }
 
 interface NoteItem {
@@ -172,7 +164,7 @@ export function QuickEntryModal({ row, module, period, onClose, onSuccess, onNav
                 {history.isLoading && <Txt variant="small" color={c.textFaint}>Yükleniyor…</Txt>}
                 {history.isError && <Txt variant="small" color={c.textFaint}>Geçmiş şu an yüklenemedi.</Txt>}
                 {!history.isLoading && !history.isError && (history.data?.length ?? 0) === 0 && (
-                  <Txt variant="small" color={c.textFaint}>Bu siteye ait önceki ay kaydı yok.</Txt>
+                  <Txt variant="small" color={c.textFaint}>Bu siteye ait başka dönem kaydı yok.</Txt>
                 )}
                 {(history.data ?? []).map(h => (
                   <Pressable

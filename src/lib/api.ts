@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
-import { num } from './format';
+import { currentPeriod, num, shiftPeriod } from './format';
 import type { LedgerRow, ModuleType, PeriodSummary } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -68,12 +68,16 @@ export function usePeriodSummary(module: ModuleType, period: string) {
  * donemlerin bakiyeleri toplanarak ISTEMCI TARAFINDA hesaplanir.
  */
 
-/** Siteye ait, secili donemden once kalan en son N ay — "Odeme Gecmisi" mini listesi */
+/**
+ * Siteye ait TUM diger donemlerin ("Odeme Gecmisi" / "Notlar" mini listesi).
+ * Zaman kisitlamasi YOK: ileri tarihli donemler de dahil, sadece o an
+ * ekranda ayrica gosterilen guncel donem (period) listeden cikarilir.
+ */
 export function useSiteHistory(
-  siteId: string | undefined, module: ModuleType, beforePeriod: string, limit = 6
+  siteId: string | undefined, module: ModuleType, period: string
 ) {
   return useQuery({
-    queryKey: ['site-history', siteId, module, beforePeriod, limit],
+    queryKey: ['site-history', siteId, module, period],
     enabled: !!siteId,
     queryFn: async (): Promise<LedgerRow[]> => {
       const { data, error } = await supabase
@@ -81,9 +85,8 @@ export function useSiteHistory(
         .select('*')
         .eq('site_id', siteId as string)
         .eq('module', module)
-        .lt('period', beforePeriod)
-        .order('period', { ascending: false })
-        .limit(limit);
+        .neq('period', period)
+        .order('period', { ascending: false });
       if (error) throw new Error(error.message);
       return (data ?? []) as LedgerRow[];
     },
@@ -104,6 +107,62 @@ export function useCarriedOverBalance(siteId: string | undefined, module: Module
         .lt('period', period);
       if (error) throw new Error(error.message);
       return (data ?? []).reduce((sum, r: { balance: string }) => sum + num(r.balance), 0);
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Yeni site / apartman ekleme                                         */
+/* ------------------------------------------------------------------ */
+
+export interface CreateSiteInput {
+  module: ModuleType;
+  name: string;
+  monthlyFee: number;
+  /** Bilancosunun aktif olacagi ilk ay: 'YYYY-MM-01' */
+  startPeriod: string;
+}
+
+/**
+ * Yeni site olusturur ve bilancosunu "Baslangic Ayi"ndan bugune kadar
+ * acar. sites INSERT'i sonrasi trg_sites_open_current_period yalnizca
+ * CARI ayin satirini acar (0006_period_automation.sql); baslangic ayi
+ * geciste kaldiysa aradaki aylar burada ensure_ledger() ile tamamlanir.
+ * Baslangic ayi ileri tarihliyse dongu hic calismaz — o ay geldiginde
+ * ensure_current_period() zaten kendiliginden acar.
+ */
+export function useCreateSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateSiteInput) => {
+      const { data: site, error } = await supabase
+        .from('sites')
+        .insert({
+          module: input.module,
+          name: input.name.trim(),
+          monthly_fee: input.monthlyFee,
+          contract_start: input.startPeriod,
+        })
+        .select('id, module, name')
+        .single();
+      if (error) throw new Error(translateDbError(error.message));
+
+      const cur = currentPeriod();
+      let p = input.startPeriod;
+      let guard = 0;
+      while (p <= cur && guard < 600) {
+        const { error: ledgerError } = await supabase.rpc('ensure_ledger', {
+          p_site_id: site.id, p_period: p,
+        });
+        if (ledgerError) throw new Error(translateDbError(ledgerError.message));
+        p = shiftPeriod(p, 1);
+        guard += 1;
+      }
+      return site as { id: string; module: ModuleType; name: string };
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['ledger', vars.module] });
+      qc.invalidateQueries({ queryKey: ['summary', vars.module] });
     },
   });
 }

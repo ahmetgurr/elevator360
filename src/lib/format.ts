@@ -14,6 +14,14 @@ export function num(v: string | number | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Kullanicinin virgul/nokta ile girdigi tutari sayiya cevirir; bos deger 0 kabul edilir */
+export function parseAmount(text: string): number {
+  if (!text.trim()) return 0;
+  const normalized = text.replace(',', '.').replace(/[^0-9.]/g, '');
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export const money = (v: string | number | null | undefined) => tl.format(num(v));
 export const moneyShort = (v: string | number | null | undefined) => tlCompact.format(num(v));
 

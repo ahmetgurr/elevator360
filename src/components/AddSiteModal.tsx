@@ -1,0 +1,154 @@
+import React, { useEffect, useState } from 'react';
+import {
+  KeyboardAvoidingView, Modal, Platform, Pressable,
+  ScrollView, StyleSheet, View,
+} from 'react-native';
+import { useTheme } from '@/lib/theme';
+import { useCreateSite } from '@/lib/api';
+import { currentPeriod, parseAmount, periodLabel } from '@/lib/format';
+import { MODULE_LABEL, type ModuleType } from '@/lib/types';
+import { PeriodSwitcher } from './pickers';
+import { Button, Field, Txt } from './ui';
+
+/**
+ * Yeni site/apartman ekleme formu. Modul tipi ekrandan miras alinir
+ * (kullanici hangi modul listesindeyse yeni site o module acilir) —
+ * ayrica secilebilir bir alan degildir, boylece site yanlislikla
+ * baska bir listede goruntulenemez hale gelmez.
+ */
+export function AddSiteModal({ visible, module, onClose, onSuccess }: {
+  visible: boolean;
+  module: ModuleType;
+  onClose: () => void;
+  onSuccess: (site: { id: string; name: string }) => void;
+}) {
+  const { c, spacing, radius } = useTheme();
+  const mutation = useCreateSite();
+
+  const [name, setName] = useState('');
+  const [feeText, setFeeText] = useState('');
+  const [startPeriod, setStartPeriod] = useState(currentPeriod());
+  const [nameError, setNameError] = useState('');
+  const [feeError, setFeeError] = useState('');
+
+  useEffect(() => {
+    if (visible) {
+      setName('');
+      setFeeText('');
+      setStartPeriod(currentPeriod());
+      setNameError('');
+      setFeeError('');
+      mutation.reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  function handleClose() {
+    if (mutation.isPending) return;
+    onClose();
+  }
+
+  function handleSave() {
+    const trimmedName = name.trim();
+    const fee = parseAmount(feeText);
+    let hasError = false;
+
+    if (!trimmedName) {
+      setNameError('Site/apartman adı girilmeli.');
+      hasError = true;
+    } else {
+      setNameError('');
+    }
+
+    if (fee <= 0) {
+      setFeeError('Aylık sabit ücret sıfırdan büyük olmalı.');
+      hasError = true;
+    } else {
+      setFeeError('');
+    }
+
+    if (hasError) return;
+
+    mutation.mutate(
+      { module, name: trimmedName, monthlyFee: fee, startPeriod },
+      { onSuccess: site => onSuccess({ id: site.id, name: site.name }) },
+    );
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <Pressable
+          onPress={handleClose}
+          style={{ flex: 1, backgroundColor: 'rgba(11,21,38,0.55)', justifyContent: 'center', padding: spacing.xl }}
+        >
+          <Pressable
+            onPress={e => e.stopPropagation()}
+            style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden', maxHeight: '88%' }}
+          >
+            <View style={{
+              padding: spacing.lg, gap: 2,
+              borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+            }}>
+              <Txt variant="h3">Yeni Site / Apartman Ekle</Txt>
+              <Txt variant="small" color={c.textMuted}>{MODULE_LABEL[module]} listesine eklenecek</Txt>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
+              <Field
+                label="Sitenin / Apartmanın Adı"
+                placeholder="Örn: Yeşil Vadi Sitesi"
+                value={name}
+                onChangeText={setName}
+                error={nameError}
+                autoCapitalize="words"
+              />
+
+              <View style={{
+                backgroundColor: c.surfaceAlt, borderRadius: radius.md,
+                paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 2,
+              }}>
+                <Txt variant="small" color={c.textMuted} style={{ fontWeight: '600' }}>Modül Tipi</Txt>
+                <Txt variant="body" color={c.text}>{MODULE_LABEL[module]}</Txt>
+              </View>
+
+              <Field
+                label="Aylık Sabit Ücret (₺)"
+                placeholder="0"
+                keyboardType="decimal-pad"
+                value={feeText}
+                onChangeText={setFeeText}
+                error={feeError}
+              />
+
+              <View style={{ gap: spacing.xs }}>
+                <Txt variant="small" color={c.textMuted} style={{ fontWeight: '600' }}>Başlangıç Ayı</Txt>
+                <PeriodSwitcher period={startPeriod} onChange={setStartPeriod} />
+                <Txt variant="tiny" color={c.textFaint}>
+                  Site, {periodLabel(startPeriod)} döneminden itibaren borçlandırılmaya başlanır.
+                </Txt>
+              </View>
+
+              {mutation.isError && (
+                <Txt variant="small" color={c.danger}>{(mutation.error as Error).message}</Txt>
+              )}
+            </ScrollView>
+
+            <View style={{
+              flexDirection: 'row', gap: spacing.md, padding: spacing.lg,
+              borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
+            }}>
+              <Button title="Vazgeç" variant="secondary" onPress={handleClose}
+                      disabled={mutation.isPending} style={{ flex: 1 }} />
+              <Button title="Kaydet" onPress={handleSave}
+                      loading={mutation.isPending} style={{ flex: 1 }} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}

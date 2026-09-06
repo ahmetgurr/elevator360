@@ -14,13 +14,15 @@ import { ConfirmModal, EmptyState, ErrorState, Loading, Toast, Txt } from '@/com
 import { LedgerListItem, SummaryStrip } from '@/components/ledger';
 import { FilterDropdown, PeriodSwitcher, SearchBar } from '@/components/pickers';
 import { QuickEntryModal } from '@/components/QuickEntryModal';
+import { AddSiteModal } from '@/components/AddSiteModal';
 
 export default function LedgerListScreen() {
   const { module: raw } = useLocalSearchParams<{ module: string }>();
   const module = raw as ModuleType;
-  const { modules } = useAuth();
+  const { modules, profile } = useAuth();
   const { c, spacing, radius } = useTheme();
   const navigation = useNavigation();
+  const canAddSite = profile?.role === 'admin' || profile?.role === 'operator';
 
   const [period, setPeriod] = useState(currentPeriod());
   const [filter, setFilter] = useState<QuickFilterKey>('all');
@@ -31,6 +33,7 @@ export default function LedgerListScreen() {
   );
   const [exporting, setExporting] = useState(false);
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
+  const [addSiteOpen, setAddSiteOpen] = useState(false);
 
   const ledger = useLedger(module, period);
   const summary = usePeriodSummary(module, period);
@@ -134,12 +137,30 @@ export default function LedgerListScreen() {
             <PeriodSwitcher period={period} onChange={setPeriod} />
             <SummaryStrip summary={summary.data} />
             <SearchBar value={search} onChange={setSearch} />
-            <FilterDropdown
-              value={filter}
-              options={QUICK_FILTERS}
-              onChange={setFilter}
-              counts={counts as any}
-            />
+            <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' }}>
+              <View style={{ flex: 1 }}>
+                <FilterDropdown
+                  value={filter}
+                  options={QUICK_FILTERS}
+                  onChange={setFilter}
+                  counts={counts as any}
+                />
+              </View>
+              {canAddSite && (
+                <Pressable
+                  onPress={() => setAddSiteOpen(true)}
+                  style={({ pressed }) => ({
+                    alignItems: 'center', justifyContent: 'center',
+                    paddingHorizontal: spacing.lg,
+                    backgroundColor: c.accentSoft,
+                    borderRadius: radius.md,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Txt variant="h3" color={c.accent} style={{ fontWeight: '700' }}>+ Ekle</Txt>
+                </Pressable>
+              )}
+            </View>
           </View>
         }
         renderItem={({ item }) => (
@@ -176,6 +197,16 @@ export default function LedgerListScreen() {
           setToast({ visible: true, variant: 'success', message: `${row.site_name} için işlem başarıyla kaydedildi.` });
         }}
         onNavigateToPeriod={handleNavigateToPeriod}
+      />
+
+      <AddSiteModal
+        visible={addSiteOpen}
+        module={module}
+        onClose={() => setAddSiteOpen(false)}
+        onSuccess={site => {
+          setAddSiteOpen(false);
+          setToast({ visible: true, variant: 'success', message: `${site.name} sisteme eklendi.` });
+        }}
       />
 
       <ConfirmModal

@@ -4,15 +4,17 @@ import {
   ScrollView, StyleSheet, View,
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
-import { useSite, useUpdateSiteDetails } from '@/lib/api';
-import { num, parseAmount, periodLabel } from '@/lib/format';
+import { useDeactivateSite, useReactivateSite, useSite, useUpdateSiteDetails } from '@/lib/api';
+import { num, parseAmount, periodLabel, shiftPeriod } from '@/lib/format';
 import type { ModuleType } from '@/lib/types';
-import { Button, Field, Loading, Txt } from './ui';
+import { Button, ConfirmModal, Field, Loading, Txt } from './ui';
 
 /**
- * Site adi / aylik sabit ucret duzenleme formu. Ucret degisikligi SADECE
- * `period` ve sonrasini etkiler; gecmis aylarin bilancosu bozulmaz
- * (bkz. useUpdateSiteDetails / set_site_fee).
+ * Site adi / aylik sabit ucret duzenleme + sozlesme feshi (pasife alma)
+ * formu. Ucret degisikligi SADECE `period` ve sonrasini etkiler; sozlesme
+ * feshi de sadece bir SONRAKI aydan itibaren gecerli olur — hicbir durumda
+ * gecmis aylarin bilancosu bozulmaz (bkz. useUpdateSiteDetails /
+ * useDeactivateSite).
  */
 export function EditSiteModal({ visible, siteId, module, period, onClose, onSuccess }: {
   visible: boolean;
@@ -21,16 +23,23 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
   /** Zam uygulanacaksa etkinlik tarihi: su an listede goruntulenen donem */
   period: string;
   onClose: () => void;
-  onSuccess: (name: string) => void;
+  /** Kaydetme/fesih/aktiflestirme basarili oldugunda gosterilecek mesaj */
+  onSuccess: (message: string) => void;
 }) {
   const { c, spacing, radius } = useTheme();
   const site = useSite(visible ? siteId : undefined);
   const mutation = useUpdateSiteDetails();
+  const deactivate = useDeactivateSite();
+  const reactivate = useReactivateSite();
 
   const [name, setName] = useState('');
   const [feeText, setFeeText] = useState('');
   const [nameError, setNameError] = useState('');
   const [feeError, setFeeError] = useState('');
+  const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false);
+
+  const effectiveTerminationPeriod = shiftPeriod(period, 1);
+  const busy = mutation.isPending || deactivate.isPending || reactivate.isPending;
 
   useEffect(() => {
     if (visible && site.data) {
@@ -39,12 +48,14 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
       setNameError('');
       setFeeError('');
       mutation.reset();
+      deactivate.reset();
+      reactivate.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, site.data?.id]);
 
   function handleClose() {
-    if (mutation.isPending) return;
+    if (busy) return;
     onClose();
   }
 
@@ -80,7 +91,28 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
 
     mutation.mutate(
       { siteId: site.data.id, module, name: trimmedName, previousName, newFee, previousFee, effectivePeriod: period },
-      { onSuccess: () => onSuccess(trimmedName) },
+      { onSuccess: () => onSuccess(`${trimmedName} güncellendi.`) },
+    );
+  }
+
+  function handleDeactivate() {
+    if (!site.data) return;
+    deactivate.mutate(
+      { siteId: site.data.id, module, effectivePeriod: effectiveTerminationPeriod },
+      {
+        onSuccess: () => {
+          setConfirmDeactivateOpen(false);
+          onSuccess(`${site.data!.name} için sözleşme ${periodLabel(effectiveTerminationPeriod)} itibarıyla feshedildi.`);
+        },
+      },
+    );
+  }
+
+  function handleReactivate() {
+    if (!site.data) return;
+    reactivate.mutate(
+      { siteId: site.data.id, module },
+      { onSuccess: () => onSuccess(`${site.data!.name} yeniden aktifleştirildi.`) },
     );
   }
 
@@ -110,13 +142,23 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
 
             {site.isLoading ? (
               <Loading label="Site bilgileri yükleniyor…" />
-            ) : site.isError ? (
+            ) : site.isError || !site.data ? (
               <View style={{ padding: spacing.lg }}>
                 <Txt variant="small" color={c.danger}>Site bilgileri yüklenemedi.</Txt>
               </View>
             ) : (
               <>
                 <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }} keyboardShouldPersistTaps="handled">
+                  {!site.data.is_active && (
+                    <View style={{
+                      backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md, gap: 2,
+                      borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
+                    }}>
+                      <Txt variant="small" color={c.textMuted} style={{ fontWeight: '700' }}>Bu site pasif (sözleşme feshedilmiş)</Txt>
+                      <Txt variant="tiny" color={c.textFaint}>Geçmiş bilanço kayıtları korunuyor; yeni dönem açılmıyor.</Txt>
+                    </View>
+                  )}
+
                   <Field
                     label="Sitenin / Apartmanın Adı"
                     value={name}
@@ -138,6 +180,46 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                   {mutation.isError && (
                     <Txt variant="small" color={c.danger}>{(mutation.error as Error).message}</Txt>
                   )}
+
+                  <View style={{
+                    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
+                    paddingTop: spacing.lg, gap: spacing.sm,
+                  }}>
+                    {site.data.is_active ? (
+                      <>
+                        <Txt variant="small" color={c.textMuted} style={{ fontWeight: '700' }}>Tehlikeli Bölge</Txt>
+                        <Txt variant="tiny" color={c.textFaint}>
+                          Sözleşme feshedilirse {periodLabel(effectiveTerminationPeriod)} itibarıyla yeni dönem açılmaz.
+                          Geçmiş tüm aylar ve borç kayıtları kesinlikle korunur, silinmez.
+                        </Txt>
+                        <Button
+                          title="Sözleşmeyi Feshet / Pasife Al"
+                          variant="danger"
+                          onPress={() => setConfirmDeactivateOpen(true)}
+                          disabled={busy}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Txt variant="tiny" color={c.textFaint}>
+                          Müşteri geri döndüyse sözleşmeyi bugünden itibaren yeniden aktifleştirebilirsiniz.
+                        </Txt>
+                        <Button
+                          title="Sözleşmeyi Yeniden Aktifleştir"
+                          variant="secondary"
+                          onPress={handleReactivate}
+                          loading={reactivate.isPending}
+                          disabled={busy}
+                        />
+                      </>
+                    )}
+                    {deactivate.isError && (
+                      <Txt variant="small" color={c.danger}>{(deactivate.error as Error).message}</Txt>
+                    )}
+                    {reactivate.isError && (
+                      <Txt variant="small" color={c.danger}>{(reactivate.error as Error).message}</Txt>
+                    )}
+                  </View>
                 </ScrollView>
 
                 <View style={{
@@ -145,15 +227,28 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                   borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
                 }}>
                   <Button title="Vazgeç" variant="secondary" onPress={handleClose}
-                          disabled={mutation.isPending} style={{ flex: 1 }} />
+                          disabled={busy} style={{ flex: 1 }} />
                   <Button title="Kaydet" onPress={handleSave}
-                          loading={mutation.isPending} style={{ flex: 1 }} />
+                          loading={mutation.isPending} disabled={busy && !mutation.isPending} style={{ flex: 1 }} />
                 </View>
               </>
             )}
           </Pressable>
         </Pressable>
       </KeyboardAvoidingView>
+
+      {!!site.data && (
+        <ConfirmModal
+          visible={confirmDeactivateOpen}
+          title="Sözleşme feshedilsin mi?"
+          message={`${site.data.name} için sözleşmeyi feshetmek üzeresiniz. ${periodLabel(effectiveTerminationPeriod)} itibarıyla yeni dönem açılmayacak. Geçmiş aylardaki tüm bilanço ve hareket kayıtları KESİNLİKLE korunacak. Bu işlemi onaylıyor musunuz?`}
+          confirmLabel="Evet, Feshet"
+          danger
+          loading={deactivate.isPending}
+          onConfirm={handleDeactivate}
+          onCancel={() => setConfirmDeactivateOpen(false)}
+        />
+      )}
     </Modal>
   );
 }

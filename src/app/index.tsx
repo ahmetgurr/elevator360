@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
@@ -20,9 +20,13 @@ export default function ModulePickerScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const autoNavigated = useRef(false);
-  const period = currentPeriod();
+  const [period, setPeriod] = useState(currentPeriod());
   const elevatorSummary = usePeriodSummary('elevator', period, modules.includes('elevator'));
   const cleaningSummary = usePeriodSummary('cleaning', period, modules.includes('cleaning'));
+  const summaryEntries = [
+    { module: 'elevator' as ModuleType, summary: elevatorSummary.data },
+    { module: 'cleaning' as ModuleType, summary: cleaningSummary.data },
+  ].filter(e => modules.includes(e.module));
 
   // Tek modul yetkisi varsa secim ekraninda oyalanma, dogrudan listeye gec.
   // push kullanilir (replace degil): boylece bu ekran yiginda kalir ve
@@ -55,8 +59,10 @@ export default function ModulePickerScreen() {
 
       {modules.length > 0 && (
         <CashSummaryPanel
-          summaries={[elevatorSummary.data, cleaningSummary.data]}
+          entries={summaryEntries}
           loading={elevatorSummary.isLoading || cleaningSummary.isLoading}
+          period={period}
+          onPeriodChange={setPeriod}
         />
       )}
 

@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { statusColors, useTheme } from '@/lib/theme';
 import { dayLabel, money, moneyShort, num } from '@/lib/format';
-import type { LedgerRow, PeriodSummary } from '@/lib/types';
+import { MODULE_LABEL, type LedgerRow, type ModuleType, type PeriodSummary } from '@/lib/types';
+import { PeriodSwitcher } from './pickers';
 import { Txt } from './ui';
 
 /* ------------------------------ Durum rozeti ---------------------------- */
@@ -31,6 +32,8 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
   const { c, spacing, radius } = useTheme();
   const balance = num(row.balance);
   const paid = num(row.net_paid);
+  // is_active migration'dan once undefined olabilir; bkz. matchesQuickFilter yorumu
+  const isActive = row.is_active !== false;
 
   return (
     <Pressable
@@ -42,6 +45,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
         borderColor: c.border,
         padding: spacing.lg,
         gap: spacing.sm,
+        opacity: isActive ? 1 : 0.6,
       })}
     >
       {/* Ust satir: site adi + durum */}
@@ -53,7 +57,9 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
             {row.days_overdue > 0 ? ` · ${row.days_overdue} gün gecikme` : ''}
           </Txt>
         </View>
-        <StatusPill statusKey={row.status_key} label={row.status_label} small />
+        {isActive
+          ? <StatusPill statusKey={row.status_key} label={row.status_label} small />
+          : <StatusPill statusKey="passive" label="Pasif" small />}
       </View>
 
       {/* Alt satir: tutarlar */}
@@ -149,29 +155,40 @@ function Stat({ label, value, color }: { label: string; value: string; color: st
 
 /* --------------------------- Patron / kasa ozeti ------------------------- */
 
+export interface ModuleSummaryEntry {
+  module: ModuleType;
+  summary: PeriodSummary | null | undefined;
+}
+
 /**
  * "Bu ay piyasadan toplam ne kadar alacagim var, ne kadari nakit,
  * kalan ne" — esnafin ana ekrana girer girmez tek bakista gormesi
  * gereken 3 metrik. Birden fazla modulun ozetini (site listesi
- * sayfasindaki SummaryStrip'ten farkli olarak) TOPLU gosterebilir.
+ * sayfasindaki SummaryStrip'ten farkli olarak) TOPLU gosterir; ay/yil
+ * navigasyonu ve tıklanınca acilan modul bazli kirilim ile "zaman
+ * yolculugu" yapilabilir.
  */
-export function CashSummaryPanel({ summaries, loading }: {
-  summaries: (PeriodSummary | null | undefined)[];
+export function CashSummaryPanel({ entries, loading, period, onPeriodChange }: {
+  entries: ModuleSummaryEntry[];
   loading?: boolean;
+  period: string;
+  onPeriodChange: (period: string) => void;
 }) {
   const { c, spacing, radius } = useTheme();
+  const [expanded, setExpanded] = useState(false);
 
-  const totals = summaries.reduce(
-    (acc, s) => {
-      if (!s) return acc;
-      acc.expected += num(s.total_expected);
-      acc.collected += num(s.total_collected);
-      acc.balance += num(s.total_balance);
+  const available = entries.filter(e => !!e.summary);
+  const totals = available.reduce(
+    (acc, e) => {
+      acc.expected += num(e.summary!.total_expected);
+      acc.collected += num(e.summary!.total_collected);
+      acc.balance += num(e.summary!.total_balance);
       return acc;
     },
     { expected: 0, collected: 0, balance: 0 },
   );
   const rate = totals.expected > 0 ? Math.round((totals.collected / totals.expected) * 100) : 0;
+  const hasBreakdown = available.length > 1;
 
   return (
     <View style={{
@@ -179,17 +196,51 @@ export function CashSummaryPanel({ summaries, loading }: {
       borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
       borderTopWidth: 4, borderTopColor: c.accent,
     }}>
-      <Txt variant="h3" color={c.textMuted}>Bu Ayın Genel Kasa Özeti</Txt>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
+        <Txt variant="h3" color={c.textMuted}>Genel Kasa Özeti</Txt>
+        <View style={{ flex: 1, maxWidth: 220 }}>
+          <PeriodSwitcher period={period} onChange={onPeriodChange} />
+        </View>
+      </View>
 
       {loading ? (
         <Txt variant="small" color={c.textFaint}>Hesaplanıyor…</Txt>
+      ) : available.length === 0 ? (
+        <Txt variant="small" color={c.textFaint}>Bu dönem için henüz veri yok.</Txt>
       ) : (
         <>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <BigStat label="Toplam Beklenen" value={totals.expected} color={c.text} />
-            <BigStat label="Tahsil Edilen" value={totals.collected} color={c.ok} />
-            <BigStat label="Kalan Alacak" value={totals.balance} color={c.danger} />
-          </View>
+          <Pressable
+            onPress={() => hasBreakdown && setExpanded(v => !v)}
+            disabled={!hasBreakdown}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <BigStat label="Toplam Beklenen" value={totals.expected} color={c.text} />
+              <BigStat label="Tahsil Edilen" value={totals.collected} color={c.ok} />
+              <BigStat label="Kalan Alacak" value={totals.balance} color={c.danger} />
+            </View>
+            {hasBreakdown && (
+              <Txt variant="tiny" color={c.accent} style={{ marginTop: spacing.sm, fontWeight: '700' }}>
+                {expanded ? '▴ Modül bazlı dökümü gizle' : '▾ Modül bazlı dökümü gör'}
+              </Txt>
+            )}
+          </Pressable>
+
+          {expanded && hasBreakdown && (
+            <View style={{ gap: spacing.sm }}>
+              {available.map(e => (
+                <View key={e.module} style={{
+                  backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm,
+                }}>
+                  <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{MODULE_LABEL[e.module]}</Txt>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <BreakdownStat label="Beklenen" value={num(e.summary!.total_expected)} color={c.textMuted} />
+                    <BreakdownStat label="Tahsil" value={num(e.summary!.total_collected)} color={c.ok} />
+                    <BreakdownStat label="Kalan" value={num(e.summary!.total_balance)} color={c.danger} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
 
           <View style={{ gap: spacing.xs }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -215,6 +266,16 @@ function BigStat({ label, value, color }: { label: string; value: number; color:
     <View style={{ gap: 2, flex: 1 }}>
       <Txt variant="small" color={c.textFaint}>{label}</Txt>
       <Txt variant="h2" color={color} numberOfLines={1}>{money(value)}</Txt>
+    </View>
+  );
+}
+
+function BreakdownStat({ label, value, color }: { label: string; value: number; color: string }) {
+  const { c } = useTheme();
+  return (
+    <View style={{ gap: 1 }}>
+      <Txt variant="tiny" color={c.textFaint}>{label}</Txt>
+      <Txt variant="moneySm" color={color}>{money(value)}</Txt>
     </View>
   );
 }

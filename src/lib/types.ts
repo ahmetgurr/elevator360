@@ -28,6 +28,7 @@ export interface LedgerRow {
   site_name: string;
   service_day: number | null;
   contract_status: 'active' | 'passive';
+  is_active: boolean;
   contact_name: string | null;
   contact_phone: string | null;
   due_date: string | null;
@@ -59,25 +60,42 @@ export interface LedgerRow {
  * gruplarla kesisebilir (ornegin hic odemeyip suresi de gecmis bir kayit
  * hem "Hiç Ödemeyenler" hem "Süresi Geçenler" icinde gorunur).
  */
-export type QuickFilterKey = 'all' | 'unpaid' | 'partial' | 'overdue' | 'completed';
+export type QuickFilterKey = 'all' | 'unpaid' | 'partial' | 'overdue' | 'completed' | 'passive';
 
-/** Liste ekranindaki filtre secenekleri — 'all' varsayilan */
+/**
+ * Liste ekranindaki filtre secenekleri — 'all' varsayilan.
+ * Pasife alinan (sozlesmesi feshedilen) siteler ana listede kalabalik
+ * yapmasin diye 'passive' DISINDA HICBIR filtre onlari gostermez;
+ * gecmis kayitlarini gormek icin kullanici bilerek "Pasif Siteler"i
+ * secmelidir (bkz. matchesQuickFilter).
+ */
 export const QUICK_FILTERS: { key: QuickFilterKey; label: string }[] = [
   { key: 'all',       label: 'Tümü' },
   { key: 'unpaid',    label: 'Hiç Ödemeyenler' },
   { key: 'partial',   label: 'Kısmi Ödeyenler / Eksik' },
   { key: 'overdue',   label: 'Süresi Geçenler' },
   { key: 'completed', label: 'Borcu Bitenler / Tamamlandı' },
+  { key: 'passive',   label: 'Pasif Siteler' },
 ];
 
+/**
+ * `!== false` (degil `truthy` kontrolu) kasitli: 0007 migration'i
+ * uygulanmadan once v_ledger'da is_active kolonu henuz yoktur ve
+ * Supabase bu alani `undefined` dondurur. `undefined`, "pasif" degil
+ * "henuz bilinmiyor" anlamina gelmeli — aksi halde migration'dan once
+ * calisan bir istemcide TUM siteler yanlislikla "pasif" sayilip ana
+ * listeden kaybolur.
+ */
 export function matchesQuickFilter(row: LedgerRow, key: QuickFilterKey): boolean {
+  const isActive = row.is_active !== false;
   switch (key) {
-    case 'unpaid':    return row.status_key === 'pending' || row.status_key === 'overdue';
-    case 'partial':   return row.status_key === 'partial' || row.status_key === 'overdue_partial';
-    case 'overdue':   return row.status_key === 'overdue' || row.status_key === 'overdue_partial';
-    case 'completed': return row.status_key === 'completed' || row.status_key === 'overpaid';
+    case 'unpaid':    return isActive && (row.status_key === 'pending' || row.status_key === 'overdue');
+    case 'partial':   return isActive && (row.status_key === 'partial' || row.status_key === 'overdue_partial');
+    case 'overdue':   return isActive && (row.status_key === 'overdue' || row.status_key === 'overdue_partial');
+    case 'completed': return isActive && (row.status_key === 'completed' || row.status_key === 'overpaid');
+    case 'passive':   return !isActive;
     case 'all':
-    default:          return true;
+    default:          return isActive;
   }
 }
 

@@ -181,9 +181,11 @@ export interface SiteRecord {
   module: ModuleType;
   name: string;
   monthly_fee: string;
+  contract_status: 'active' | 'passive';
+  is_active: boolean;
 }
 
-/** Duzenleme formunun GUNCEL adi/ucreti sites tablosundan taze okumasi icin */
+/** Duzenleme formunun GUNCEL adi/ucreti/durumu sites tablosundan taze okumasi icin */
 export function useSite(siteId: string | undefined) {
   return useQuery({
     queryKey: ['site', siteId],
@@ -191,11 +193,67 @@ export function useSite(siteId: string | undefined) {
     queryFn: async (): Promise<SiteRecord> => {
       const { data, error } = await supabase
         .from('sites')
-        .select('id, module, name, monthly_fee')
+        .select('id, module, name, monthly_fee, contract_status, is_active')
         .eq('id', siteId as string)
         .single();
       if (error) throw new Error(error.message);
       return data as SiteRecord;
+    },
+  });
+}
+
+export interface DeactivateSiteInput {
+  siteId: string;
+  module: ModuleType;
+  /** Sozlesmenin bu aydan ITIBAREN feshedilecegi; oncesi hic dokunulmaz */
+  effectivePeriod: string;
+}
+
+/**
+ * Sozlesme feshi / pasife alma. deactivate_site() RPC'sine devredilir
+ * (0006_period_automation.sql): sites.contract_status = 'passive' yapar,
+ * yalnizca effectivePeriod ve SONRASINDAKI, HENUZ HAREKET GORMEMIS BOS
+ * donem satirlarini temizler. Hareketi/odemesi olan hicbir ay, gecmis
+ * hicbir ay SILINMEZ veya DEGISTIRILMEZ — site KESINLIKLE fiziksel
+ * olarak silinmez, sadece yeni donem acilmasi durur (bkz. open_period /
+ * ensure_current_period'in contract_status = 'active' kosulu).
+ */
+export function useDeactivateSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DeactivateSiteInput) => {
+      const { data, error } = await supabase.rpc('deactivate_site', {
+        p_site_id: input.siteId,
+        p_effective_period: input.effectivePeriod,
+      });
+      if (error) throw new Error(translateDbError(error.message));
+      return data;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['ledger', vars.module] });
+      qc.invalidateQueries({ queryKey: ['summary', vars.module] });
+      qc.invalidateQueries({ queryKey: ['site', vars.siteId] });
+    },
+  });
+}
+
+export interface ReactivateSiteInput {
+  siteId: string;
+  module: ModuleType;
+}
+
+/** Feshedilmis bir sozlesmeyi bugunden itibaren yeniden aktiflestirir. */
+export function useReactivateSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ReactivateSiteInput) => {
+      const { error } = await supabase.rpc('reactivate_site', { p_site_id: input.siteId });
+      if (error) throw new Error(translateDbError(error.message));
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['ledger', vars.module] });
+      qc.invalidateQueries({ queryKey: ['summary', vars.module] });
+      qc.invalidateQueries({ queryKey: ['site', vars.siteId] });
     },
   });
 }

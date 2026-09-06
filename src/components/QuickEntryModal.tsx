@@ -31,8 +31,8 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   canEdit: boolean;
   onClose: () => void;
   onSuccess: (row: LedgerRow) => void;
-  /** Site bilgisi (ad/ucret) basariyla guncellendiginde tetiklenir */
-  onSiteUpdated: (name: string) => void;
+  /** Site bilgisi guncellendiginde/feshedildiginde/aktiflestirildiginde gosterilecek mesaj */
+  onSiteUpdated: (message: string) => void;
   /** "Ödeme Geçmişi" kartından tıklanınca o ayın tablosuna ve site detayına geçilir */
   onNavigateToPeriod: (period: string, row: LedgerRow) => void;
 }) {
@@ -84,9 +84,9 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
     onClose();
   }
 
-  function handleSiteUpdated(name: string) {
+  function handleSiteUpdated(message: string) {
     setEditSiteOpen(false);
-    onSiteUpdated(name);
+    onSiteUpdated(message);
     onClose();
   }
 

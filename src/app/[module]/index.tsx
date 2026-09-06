@@ -86,18 +86,20 @@ export default function LedgerListScreen() {
   }, [navigation, module, exporting, hasRows, c.accent, c.accentSoft, radius.pill]);
 
   // Filtre secenegi basina kayit sayisi (dropdown'da gosterilir)
+  // NOT: 'all' icin de matchesQuickFilter cagrilir — artik "Tumu" pasif
+  // siteleri DISLIYOR (bkz. types.ts), bu yuzden kisayol kullanilamaz.
   const counts = useMemo(() => {
     const data = ledger.data ?? [];
     const out: Record<string, number> = {};
     for (const f of QUICK_FILTERS) {
-      out[f.key] = f.key === 'all' ? data.length : data.filter(r => matchesQuickFilter(r, f.key)).length;
+      out[f.key] = data.filter(r => matchesQuickFilter(r, f.key)).length;
     }
     return out;
   }, [ledger.data]);
 
   const rows = useMemo(() => {
     const data = ledger.data ?? [];
-    const byFilter = filter === 'all' ? data : data.filter(r => matchesQuickFilter(r, filter));
+    const byFilter = data.filter(r => matchesQuickFilter(r, filter));
     const q = search.trim().toLocaleLowerCase('tr-TR');
     if (!q) return byFilter;
     return byFilter.filter(r =>
@@ -197,8 +199,8 @@ export default function LedgerListScreen() {
           setSelectedRow(null);
           setToast({ visible: true, variant: 'success', message: `${row.site_name} için işlem başarıyla kaydedildi.` });
         }}
-        onSiteUpdated={name => {
-          setToast({ visible: true, variant: 'success', message: `${name} güncellendi.` });
+        onSiteUpdated={message => {
+          setToast({ visible: true, variant: 'success', message });
         }}
         onNavigateToPeriod={handleNavigateToPeriod}
       />

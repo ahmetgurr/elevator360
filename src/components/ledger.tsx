@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { statusColors, useTheme } from '@/lib/theme';
-import { dayLabel, money, moneyShort, num } from '@/lib/format';
+import { dayLabel, isFuturePeriod, money, moneyShort, num } from '@/lib/format';
 import { MODULE_LABEL, type LedgerRow, type ModuleType, type PeriodSummary } from '@/lib/types';
 import { PeriodSwitcher } from './pickers';
 import { Txt } from './ui';
@@ -113,10 +113,15 @@ export function SummaryStrip({ summary }: { summary: PeriodSummary | null | unde
       backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.lg,
       borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, gap: spacing.md,
     }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Stat label="Beklenen"  value={moneyShort(summary.total_expected)}  color={c.text} />
-        <Stat label="Tahsil"    value={moneyShort(summary.total_collected)} color={c.ok} />
-        <Stat label="Kalan"     value={moneyShort(summary.total_balance)}   color={c.danger} />
+      {/* Mobilde tek satira sigmaya calisip kesilmesin diye: Beklenen
+          ustte tek basina genis, Tahsil/Kalan altta yan yana (bkz.
+          saha geri bildirimi). */}
+      <View style={{ gap: spacing.sm }}>
+        <Stat label="Beklenen" value={moneyShort(summary.total_expected)} color={c.text} full />
+        <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+          <Stat label="Tahsil" value={moneyShort(summary.total_collected)} color={c.ok} />
+          <Stat label="Kalan"  value={moneyShort(summary.total_balance)}  color={c.danger} />
+        </View>
       </View>
 
       {/* Tahsilat orani */}
@@ -143,12 +148,39 @@ export function SummaryStrip({ summary }: { summary: PeriodSummary | null | unde
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+function Stat({ label, value, color, full }: { label: string; value: string; color: string; full?: boolean }) {
   const { c } = useTheme();
   return (
-    <View style={{ gap: 2 }}>
+    <View style={{ gap: 2, flex: full ? undefined : 1 }}>
       <Txt variant="tiny" color={c.textFaint}>{label}</Txt>
-      <Txt variant="money" color={color}>{value}</Txt>
+      <Txt variant={full ? 'moneyLg' : 'money'} color={color} numberOfLines={1}>{value}</Txt>
+    </View>
+  );
+}
+
+/* --------------------------- Ongorulen bilanco --------------------------- */
+
+/**
+ * Henuz acilmamis (gelecek) bir donem icin liste ekraninda gosterilen
+ * ONGORU karti. Kesikli kenarlik + soluk renkler ile "gercek veri
+ * degil, tahmin" oldugu bilincli olarak ayristirilir.
+ */
+export function ProjectedSummaryCard({ siteCount, totalExpected }: {
+  siteCount: number; totalExpected: number;
+}) {
+  const { c, spacing, radius } = useTheme();
+  return (
+    <View style={{
+      backgroundColor: c.surfaceAlt, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm,
+      borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, borderStyle: 'dashed',
+    }}>
+      <Txt variant="tiny" color={c.textFaint} style={{ fontWeight: '700' }}>📅 ÖNGÖRÜLEN BİLANÇO</Txt>
+      <Txt variant="moneyLg" color={c.textMuted} numberOfLines={1}>{money(totalExpected)}</Txt>
+      <Txt variant="tiny" color={c.textFaint}>
+        {siteCount > 0
+          ? `${siteCount} aktif sitenin güncel ücretlerine göre tahmindir; bu dönem henüz açılmadı.`
+          : 'Bu dönemde aktif site bulunmuyor.'}
+      </Txt>
     </View>
   );
 }
@@ -160,6 +192,19 @@ export interface ModuleSummaryEntry {
   summary: PeriodSummary | null | undefined;
 }
 
+export interface ModuleProjectionEntry {
+  module: ModuleType;
+  projected: { site_count: number; total_expected: number } | null | undefined;
+}
+
+interface DisplayRow {
+  module: ModuleType;
+  expected: number;
+  collected: number;
+  balance: number;
+  hasData: boolean;
+}
+
 /**
  * "Bu ay piyasadan toplam ne kadar alacagim var, ne kadari nakit,
  * kalan ne" — esnafin ana ekrana girer girmez tek bakista gormesi
@@ -167,9 +212,18 @@ export interface ModuleSummaryEntry {
  * sayfasindaki SummaryStrip'ten farkli olarak) TOPLU gosterir; ay/yil
  * navigasyonu ve tıklanınca acilan modul bazli kirilim ile "zaman
  * yolculugu" yapilabilir.
+ *
+ * Modul dokumu (breakdown) HER ZAMAN kullanicinin erisimi olan tum
+ * moduller icin gosterilir — bir modulde veri yoksa satiri gizlemek
+ * yerine "Kayıt Yok" olarak acikca belirtilir.
+ *
+ * Gercek veri hic yoksa VE goruntulenen donem gelecekteyse (henuz
+ * ensure_current_period tarafindan acilmamis), projectedEntries
+ * verilmisse "Öngörülen Bilanço" moduna geçilir — bkz. useProjectedSummary.
  */
-export function CashSummaryPanel({ entries, loading, period, onPeriodChange }: {
+export function CashSummaryPanel({ entries, projectedEntries, loading, period, onPeriodChange }: {
   entries: ModuleSummaryEntry[];
+  projectedEntries?: ModuleProjectionEntry[];
   loading?: boolean;
   period: string;
   onPeriodChange: (period: string) => void;
@@ -177,18 +231,30 @@ export function CashSummaryPanel({ entries, loading, period, onPeriodChange }: {
   const { c, spacing, radius } = useTheme();
   const [expanded, setExpanded] = useState(false);
 
-  const available = entries.filter(e => !!e.summary);
-  const totals = available.reduce(
-    (acc, e) => {
-      acc.expected += num(e.summary!.total_expected);
-      acc.collected += num(e.summary!.total_collected);
-      acc.balance += num(e.summary!.total_balance);
-      return acc;
-    },
+  const hasAnyRealData = entries.some(e => !!e.summary);
+  const isProjection = !hasAnyRealData && isFuturePeriod(period) && !!projectedEntries;
+  const showEmpty = !hasAnyRealData && !isProjection;
+
+  const rows: DisplayRow[] = isProjection
+    ? entries.map(e => {
+        const p = projectedEntries!.find(pe => pe.module === e.module)?.projected;
+        const expected = p?.total_expected ?? 0;
+        return { module: e.module, expected, collected: 0, balance: expected, hasData: !!p && p.site_count > 0 };
+      })
+    : entries.map(e => ({
+        module: e.module,
+        expected: num(e.summary?.total_expected ?? 0),
+        collected: num(e.summary?.total_collected ?? 0),
+        balance: num(e.summary?.total_balance ?? 0),
+        hasData: !!e.summary,
+      }));
+
+  const totals = rows.reduce(
+    (acc, r) => { acc.expected += r.expected; acc.collected += r.collected; acc.balance += r.balance; return acc; },
     { expected: 0, collected: 0, balance: 0 },
   );
   const rate = totals.expected > 0 ? Math.round((totals.collected / totals.expected) * 100) : 0;
-  const hasBreakdown = available.length > 1;
+  const hasBreakdown = rows.length > 1;
 
   return (
     <View style={{
@@ -205,18 +271,40 @@ export function CashSummaryPanel({ entries, loading, period, onPeriodChange }: {
 
       {loading ? (
         <Txt variant="small" color={c.textFaint}>Hesaplanıyor…</Txt>
-      ) : available.length === 0 ? (
+      ) : showEmpty ? (
         <Txt variant="small" color={c.textFaint}>Bu dönem için henüz veri yok.</Txt>
       ) : (
         <>
+          {isProjection && (
+            <View style={{
+              backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md,
+              borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, borderStyle: 'dashed',
+            }}>
+              <Txt variant="tiny" color={c.textFaint} style={{ fontWeight: '700' }}>
+                📅 ÖNGÖRÜLEN BİLANÇO — aktif sitelerin güncel ücretlerine göre tahmini; bu dönem henüz açılmadı.
+              </Txt>
+            </View>
+          )}
+
           <Pressable
             onPress={() => hasBreakdown && setExpanded(v => !v)}
             disabled={!hasBreakdown}
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <BigStat label="Toplam Beklenen" value={totals.expected} color={c.text} />
-              <BigStat label="Tahsil Edilen" value={totals.collected} color={c.ok} />
-              <BigStat label="Kalan Alacak" value={totals.balance} color={c.danger} />
+            <View style={{ gap: spacing.md }}>
+              <BigStat
+                label="Toplam Beklenen" value={totals.expected}
+                color={isProjection ? c.textMuted : c.text} full
+              />
+              <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+                <BigStat
+                  label="Tahsil Edilen" value={totals.collected}
+                  color={isProjection ? c.textFaint : c.ok}
+                />
+                <BigStat
+                  label="Kalan Alacak" value={totals.balance}
+                  color={isProjection ? c.textFaint : c.danger}
+                />
+              </View>
             </View>
             {hasBreakdown && (
               <Txt variant="tiny" color={c.accent} style={{ marginTop: spacing.sm, fontWeight: '700' }}>
@@ -227,45 +315,55 @@ export function CashSummaryPanel({ entries, loading, period, onPeriodChange }: {
 
           {expanded && hasBreakdown && (
             <View style={{ gap: spacing.sm }}>
-              {available.map(e => (
-                <View key={e.module} style={{
+              {rows.map(r => (
+                <View key={r.module} style={{
                   backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm,
                 }}>
-                  <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{MODULE_LABEL[e.module]}</Txt>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <BreakdownStat label="Beklenen" value={num(e.summary!.total_expected)} color={c.textMuted} />
-                    <BreakdownStat label="Tahsil" value={num(e.summary!.total_collected)} color={c.ok} />
-                    <BreakdownStat label="Kalan" value={num(e.summary!.total_balance)} color={c.danger} />
-                  </View>
+                  {r.hasData ? (
+                    <>
+                      <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{MODULE_LABEL[r.module]}</Txt>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <BreakdownStat label="Beklenen" value={r.expected} color={c.textMuted} />
+                        <BreakdownStat label="Tahsil" value={r.collected} color={c.ok} />
+                        <BreakdownStat label="Kalan" value={r.balance} color={c.danger} />
+                      </View>
+                    </>
+                  ) : (
+                    <Txt variant="small" color={c.textFaint}>
+                      {MODULE_LABEL[r.module]}: {money(0)} (Kayıt Yok)
+                    </Txt>
+                  )}
                 </View>
               ))}
             </View>
           )}
 
-          <View style={{ gap: spacing.xs }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Txt variant="tiny" color={c.textFaint}>Tahsilat oranı</Txt>
-              <Txt variant="tiny" color={c.textMuted}>%{rate}</Txt>
+          {!isProjection && (
+            <View style={{ gap: spacing.xs }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Txt variant="tiny" color={c.textFaint}>Tahsilat oranı</Txt>
+                <Txt variant="tiny" color={c.textMuted}>%{rate}</Txt>
+              </View>
+              <View style={{ height: 6, backgroundColor: c.surfaceAlt, borderRadius: radius.pill, overflow: 'hidden' }}>
+                <View style={{
+                  width: `${Math.min(100, Math.max(0, rate))}%`, height: '100%',
+                  backgroundColor: rate >= 80 ? c.ok : rate >= 40 ? c.accent : c.danger,
+                }} />
+              </View>
             </View>
-            <View style={{ height: 6, backgroundColor: c.surfaceAlt, borderRadius: radius.pill, overflow: 'hidden' }}>
-              <View style={{
-                width: `${Math.min(100, Math.max(0, rate))}%`, height: '100%',
-                backgroundColor: rate >= 80 ? c.ok : rate >= 40 ? c.accent : c.danger,
-              }} />
-            </View>
-          </View>
+          )}
         </>
       )}
     </View>
   );
 }
 
-function BigStat({ label, value, color }: { label: string; value: number; color: string }) {
+function BigStat({ label, value, color, full }: { label: string; value: number; color: string; full?: boolean }) {
   const { c } = useTheme();
   return (
-    <View style={{ gap: 2, flex: 1 }}>
+    <View style={{ gap: 2, flex: full ? undefined : 1 }}>
       <Txt variant="small" color={c.textFaint}>{label}</Txt>
-      <Txt variant="h2" color={color} numberOfLines={1}>{money(value)}</Txt>
+      <Txt variant={full ? 'moneyLg' : 'moneyMd'} color={color} numberOfLines={1}>{money(value)}</Txt>
     </View>
   );
 }

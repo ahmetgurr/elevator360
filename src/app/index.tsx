@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { usePeriodSummary } from '@/lib/api';
+import { usePeriodSummary, useProjectedSummary } from '@/lib/api';
 import { useTheme } from '@/lib/theme';
-import { currentPeriod } from '@/lib/format';
+import { currentPeriod, isFuturePeriod } from '@/lib/format';
 import { MODULE_LABEL, type ModuleType } from '@/lib/types';
 import { Button, EmptyState, Txt } from '@/components/ui';
 import { CashSummaryPanel } from '@/components/ledger';
@@ -21,11 +21,18 @@ export default function ModulePickerScreen() {
   const navigation = useNavigation();
   const autoNavigated = useRef(false);
   const [period, setPeriod] = useState(currentPeriod());
+  const future = isFuturePeriod(period);
   const elevatorSummary = usePeriodSummary('elevator', period, modules.includes('elevator'));
   const cleaningSummary = usePeriodSummary('cleaning', period, modules.includes('cleaning'));
+  const elevatorProjected = useProjectedSummary('elevator', period, modules.includes('elevator') && future);
+  const cleaningProjected = useProjectedSummary('cleaning', period, modules.includes('cleaning') && future);
   const summaryEntries = [
     { module: 'elevator' as ModuleType, summary: elevatorSummary.data },
     { module: 'cleaning' as ModuleType, summary: cleaningSummary.data },
+  ].filter(e => modules.includes(e.module));
+  const projectedEntries = [
+    { module: 'elevator' as ModuleType, projected: elevatorProjected.data },
+    { module: 'cleaning' as ModuleType, projected: cleaningProjected.data },
   ].filter(e => modules.includes(e.module));
 
   // Tek modul yetkisi varsa secim ekraninda oyalanma, dogrudan listeye gec.
@@ -60,6 +67,7 @@ export default function ModulePickerScreen() {
       {modules.length > 0 && (
         <CashSummaryPanel
           entries={summaryEntries}
+          projectedEntries={projectedEntries}
           loading={elevatorSummary.isLoading || cleaningSummary.isLoading}
           period={period}
           onPeriodChange={setPeriod}

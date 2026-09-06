@@ -63,6 +63,46 @@ export function usePeriodSummary(module: ModuleType, period: string, enabled = t
   });
 }
 
+export interface ProjectedSummary {
+  site_count: number;
+  total_expected: number;
+}
+
+/**
+ * Henuz acilmamis (gelecek) bir donem icin "ne kadar alacagim olacak"
+ * ONGORUSU. KESINLIKLE monthly_ledger'a satir YAZMAZ / OKUMAZ — sadece
+ * o an aktif olan sitelerin GUNCEL monthly_fee'lerini, open_period()'un
+ * kullandigi AYNI uygunluk kuraliyla (contract_start/contract_end)
+ * client tarafinda toplar. Boylece:
+ *  - Veri tutarliligi hicbir zaman riske girmez (spekulatif satir yok),
+ *  - Ucret degisirse ya da site pasife alinirsa ongoru KENDILIGINDEN
+ *    guncel kalir (her sorguda yeniden hesaplanir),
+ *  - O ay gercekten geldiginde open_period() zaten AYNI siteleri acar.
+ */
+export function useProjectedSummary(module: ModuleType, period: string, enabled = true) {
+  return useQuery({
+    queryKey: ['projected-summary', module, period],
+    enabled,
+    queryFn: async (): Promise<ProjectedSummary> => {
+      const { data, error } = await supabase
+        .from('sites')
+        .select('monthly_fee, contract_start, contract_end')
+        .eq('module', module)
+        .eq('contract_status', 'active');
+      if (error) throw new Error(error.message);
+
+      const eligible = (data ?? []).filter((s: { contract_start: string | null; contract_end: string | null }) =>
+        (!s.contract_start || s.contract_start <= period) &&
+        (!s.contract_end || s.contract_end >= period)
+      );
+      const total = eligible.reduce(
+        (sum, s: { monthly_fee: string }) => sum + num(s.monthly_fee), 0
+      );
+      return { site_count: eligible.length, total_expected: total };
+    },
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* Site gecmisi (odeme sicili + gecmisten devreden bakiye)             */
 /* ------------------------------------------------------------------ */
@@ -183,9 +223,10 @@ export interface SiteRecord {
   monthly_fee: string;
   contract_status: 'active' | 'passive';
   is_active: boolean;
+  contract_start: string | null;
 }
 
-/** Duzenleme formunun GUNCEL adi/ucreti/durumu sites tablosundan taze okumasi icin */
+/** Duzenleme formunun GUNCEL adi/ucreti/durumu/baslangic ayini sites tablosundan taze okumasi icin */
 export function useSite(siteId: string | undefined) {
   return useQuery({
     queryKey: ['site', siteId],
@@ -193,11 +234,47 @@ export function useSite(siteId: string | undefined) {
     queryFn: async (): Promise<SiteRecord> => {
       const { data, error } = await supabase
         .from('sites')
-        .select('id, module, name, monthly_fee, contract_status, is_active')
+        .select('id, module, name, monthly_fee, contract_status, is_active, contract_start')
         .eq('id', siteId as string)
         .single();
       if (error) throw new Error(error.message);
       return data as SiteRecord;
+    },
+  });
+}
+
+export interface SetSiteStartPeriodInput {
+  siteId: string;
+  module: ModuleType;
+  /** Yeni baslangic ayi: 'YYYY-MM-01' */
+  newStartPeriod: string;
+}
+
+/**
+ * Yanlis girilen "Baslangic Ayi"ni duzeltir. set_site_start_period()
+ * RPC'sine devredilir (0008_site_start_period.sql): baslangic erkene
+ * cekildiyse aradaki eksik aylari acar, geciye atildiysa aradaki
+ * yalnizca BOS (hareketsiz) aylari temizler — hareket gormus hicbir ay
+ * asla silinmez/degistirilmez.
+ */
+export function useSetSiteStartPeriod() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: SetSiteStartPeriodInput) => {
+      const { data, error } = await supabase.rpc('set_site_start_period', {
+        p_site_id: input.siteId,
+        p_new_start_period: input.newStartPeriod,
+      });
+      if (error) throw new Error(translateDbError(error.message));
+      const row = Array.isArray(data) ? data[0] : data;
+      return row as { added_periods: number; removed_empty_periods: number; kept_periods_with_data: number } | undefined;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['ledger', vars.module] });
+      qc.invalidateQueries({ queryKey: ['summary', vars.module] });
+      qc.invalidateQueries({ queryKey: ['site-history', vars.siteId, vars.module] });
+      qc.invalidateQueries({ queryKey: ['carried-over', vars.siteId, vars.module] });
+      qc.invalidateQueries({ queryKey: ['site', vars.siteId] });
     },
   });
 }

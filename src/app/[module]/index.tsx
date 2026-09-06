@@ -2,16 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { useLedger, usePeriodSummary } from '@/lib/api';
+import { useLedger, usePeriodSummary, useProjectedSummary } from '@/lib/api';
 import { useTheme } from '@/lib/theme';
-import { currentPeriod, periodFileLabel, periodLabel } from '@/lib/format';
+import { currentPeriod, isFuturePeriod, periodFileLabel, periodLabel } from '@/lib/format';
 import { exportLedgerCsv } from '@/lib/export';
 import {
   MODULE_FILE_LABEL, MODULE_LABEL, QUICK_FILTERS, matchesQuickFilter,
   type LedgerRow, type ModuleType, type QuickFilterKey,
 } from '@/lib/types';
 import { ConfirmModal, EmptyState, ErrorState, Loading, Toast, Txt } from '@/components/ui';
-import { LedgerListItem, SummaryStrip } from '@/components/ledger';
+import { LedgerListItem, ProjectedSummaryCard, SummaryStrip } from '@/components/ledger';
 import { FilterDropdown, PeriodSwitcher, SearchBar } from '@/components/pickers';
 import { QuickEntryModal } from '@/components/QuickEntryModal';
 import { AddSiteModal } from '@/components/AddSiteModal';
@@ -37,6 +37,8 @@ export default function LedgerListScreen() {
 
   const ledger = useLedger(module, period);
   const summary = usePeriodSummary(module, period);
+  const future = isFuturePeriod(period);
+  const projected = useProjectedSummary(module, period, future);
   const hasRows = (ledger.data?.length ?? 0) > 0;
 
   async function handleExport() {
@@ -137,7 +139,14 @@ export default function LedgerListScreen() {
         ListHeaderComponent={
           <View style={{ gap: spacing.md, marginBottom: spacing.xs }}>
             <PeriodSwitcher period={period} onChange={setPeriod} />
-            <SummaryStrip summary={summary.data} />
+            {summary.data ? (
+              <SummaryStrip summary={summary.data} />
+            ) : future ? (
+              <ProjectedSummaryCard
+                siteCount={projected.data?.site_count ?? 0}
+                totalExpected={projected.data?.total_expected ?? 0}
+              />
+            ) : null}
             <SearchBar value={search} onChange={setSearch} />
             <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' }}>
               <View style={{ flex: 1 }}>
@@ -176,7 +185,9 @@ export default function LedgerListScreen() {
                 detail={search.trim()
                   ? 'Farklı bir isim veya kod ile tekrar deneyin.'
                   : filter === 'all'
-                    ? 'Aktif sitelerin bu ayki satırları otomatik açılır. Site tanımlıysa listede görünmeli.'
+                    ? (future
+                        ? 'Bu ay henüz gelmedi; gerçek borç/tahsilat kayıtları o ay geldiğinde otomatik açılır. Yukarıdaki öngörü tahminidir.'
+                        : 'Aktif sitelerin bu ayki satırları otomatik açılır. Site tanımlıysa listede görünmeli.')
                     : 'Farklı bir durum seçerek listeyi genişletebilirsiniz.'}
               />
         }

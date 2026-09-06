@@ -57,6 +57,11 @@ export function shiftPeriod(period: string, months: number): string {
   return toPeriod(new Date(y, m - 1 + months, 1));
 }
 
+/** Donem henuz acilmamis (bugunku aydan sonraki) bir gelecek ay mi? */
+export function isFuturePeriod(period: string): boolean {
+  return period > currentPeriod();
+}
+
 /** '2026-09-15' -> '15.09.2026' */
 export function dateLabel(d: string | null | undefined): string {
   if (!d) return '—';

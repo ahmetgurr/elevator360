@@ -4,9 +4,12 @@ import {
   ScrollView, StyleSheet, View,
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
-import { useDeactivateSite, useReactivateSite, useSite, useUpdateSiteDetails } from '@/lib/api';
-import { num, parseAmount, periodLabel, shiftPeriod } from '@/lib/format';
+import {
+  useDeactivateSite, useReactivateSite, useSetSiteStartPeriod, useSite, useUpdateSiteDetails,
+} from '@/lib/api';
+import { currentPeriod, num, parseAmount, periodLabel, shiftPeriod } from '@/lib/format';
 import type { ModuleType } from '@/lib/types';
+import { PeriodSwitcher } from './pickers';
 import { Button, ConfirmModal, Field, Loading, Txt } from './ui';
 
 /**
@@ -31,25 +34,32 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
   const mutation = useUpdateSiteDetails();
   const deactivate = useDeactivateSite();
   const reactivate = useReactivateSite();
+  const setStartPeriod = useSetSiteStartPeriod();
 
   const [name, setName] = useState('');
   const [feeText, setFeeText] = useState('');
   const [nameError, setNameError] = useState('');
   const [feeError, setFeeError] = useState('');
   const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false);
+  const [startPeriod, setStartPeriodValue] = useState(currentPeriod());
+  const [confirmStartPeriodOpen, setConfirmStartPeriodOpen] = useState(false);
 
   const effectiveTerminationPeriod = shiftPeriod(period, 1);
-  const busy = mutation.isPending || deactivate.isPending || reactivate.isPending;
+  const busy = mutation.isPending || deactivate.isPending || reactivate.isPending || setStartPeriod.isPending;
+  const originalStartPeriod = site.data?.contract_start ?? currentPeriod();
+  const startPeriodChanged = startPeriod !== originalStartPeriod;
 
   useEffect(() => {
     if (visible && site.data) {
       setName(site.data.name);
       setFeeText(String(num(site.data.monthly_fee)));
+      setStartPeriodValue(site.data.contract_start ?? currentPeriod());
       setNameError('');
       setFeeError('');
       mutation.reset();
       deactivate.reset();
       reactivate.reset();
+      setStartPeriod.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, site.data?.id]);
@@ -92,6 +102,24 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
     mutation.mutate(
       { siteId: site.data.id, module, name: trimmedName, previousName, newFee, previousFee, effectivePeriod: period },
       { onSuccess: () => onSuccess(`${trimmedName} güncellendi.`) },
+    );
+  }
+
+  function handleUpdateStartPeriod() {
+    if (!site.data) return;
+    setStartPeriod.mutate(
+      { siteId: site.data.id, module, newStartPeriod: startPeriod },
+      {
+        onSuccess: result => {
+          setConfirmStartPeriodOpen(false);
+          const bits: string[] = [];
+          if (result && result.added_periods > 0) bits.push(`${result.added_periods} ay açıldı`);
+          if (result && result.removed_empty_periods > 0) bits.push(`${result.removed_empty_periods} boş ay temizlendi`);
+          if (result && result.kept_periods_with_data > 0) bits.push(`${result.kept_periods_with_data} ay hareket gördüğü için korundu`);
+          const detail = bits.length > 0 ? ` (${bits.join(', ')})` : '';
+          onSuccess(`${site.data!.name} için başlangıç ayı ${periodLabel(startPeriod)} olarak güncellendi${detail}.`);
+        },
+      },
     );
   }
 
@@ -181,6 +209,26 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                     <Txt variant="small" color={c.danger}>{(mutation.error as Error).message}</Txt>
                   )}
 
+                  <View style={{ gap: spacing.xs }}>
+                    <Txt variant="small" color={c.textMuted} style={{ fontWeight: '600' }}>Başlangıç Ayı</Txt>
+                    <PeriodSwitcher period={startPeriod} onChange={setStartPeriodValue} />
+                    <Txt variant="tiny" color={c.textFaint}>
+                      Yanlış girilmişse buradan düzeltebilirsiniz; ilgili ayların bilançosu değişikliğe göre
+                      güvenli şekilde açılır/temizlenir. Hareket görmüş hiçbir ay silinmez.
+                    </Txt>
+                    {startPeriodChanged && (
+                      <Button
+                        title="Başlangıç Ayını Güncelle"
+                        variant="secondary"
+                        onPress={() => setConfirmStartPeriodOpen(true)}
+                        disabled={busy}
+                      />
+                    )}
+                    {setStartPeriod.isError && (
+                      <Txt variant="small" color={c.danger}>{(setStartPeriod.error as Error).message}</Txt>
+                    )}
+                  </View>
+
                   <View style={{
                     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
                     paddingTop: spacing.lg, gap: spacing.sm,
@@ -238,16 +286,29 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
       </KeyboardAvoidingView>
 
       {!!site.data && (
-        <ConfirmModal
-          visible={confirmDeactivateOpen}
-          title="Sözleşme feshedilsin mi?"
-          message={`${site.data.name} için sözleşmeyi feshetmek üzeresiniz. ${periodLabel(effectiveTerminationPeriod)} itibarıyla yeni dönem açılmayacak. Geçmiş aylardaki tüm bilanço ve hareket kayıtları KESİNLİKLE korunacak. Bu işlemi onaylıyor musunuz?`}
-          confirmLabel="Evet, Feshet"
-          danger
-          loading={deactivate.isPending}
-          onConfirm={handleDeactivate}
-          onCancel={() => setConfirmDeactivateOpen(false)}
-        />
+        <>
+          <ConfirmModal
+            visible={confirmDeactivateOpen}
+            title="Sözleşme feshedilsin mi?"
+            message={`${site.data.name} için sözleşmeyi feshetmek üzeresiniz. ${periodLabel(effectiveTerminationPeriod)} itibarıyla yeni dönem açılmayacak. Geçmiş aylardaki tüm bilanço ve hareket kayıtları KESİNLİKLE korunacak. Bu işlemi onaylıyor musunuz?`}
+            confirmLabel="Evet, Feshet"
+            danger
+            loading={deactivate.isPending}
+            onConfirm={handleDeactivate}
+            onCancel={() => setConfirmDeactivateOpen(false)}
+          />
+
+          <ConfirmModal
+            visible={confirmStartPeriodOpen}
+            title="Başlangıç ayı değiştirilsin mi?"
+            message={`Emin misiniz? ${site.data.name} için başlangıç ayı ${periodLabel(startPeriod)} olarak değiştirilecek. Geçmiş/gelecek borç kayıtları buna göre yeniden hesaplanacak: aradaki eksik aylar açılır ya da hareket görmemiş boş aylar temizlenir. Hareket görmüş (ödeme/ekstra içeren) hiçbir ay kesinlikle silinmez.`}
+            confirmLabel="Evet, Güncelle"
+            danger
+            loading={setStartPeriod.isPending}
+            onConfirm={handleUpdateStartPeriod}
+            onCancel={() => setConfirmStartPeriodOpen(false)}
+          />
+        </>
       )}
     </Modal>
   );

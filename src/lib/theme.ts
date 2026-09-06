@@ -106,6 +106,8 @@ export const font = {
   tiny: { fontSize: 11, fontWeight: '600' as const },
   money: { fontSize: 16, fontWeight: '700' as const, fontVariant: ['tabular-nums'] as const },
   moneySm: { fontSize: 13, fontWeight: '600' as const, fontVariant: ['tabular-nums'] as const },
+  moneyLg: { fontSize: 26, fontWeight: '700' as const, fontVariant: ['tabular-nums'] as const },
+  moneyMd: { fontSize: 20, fontWeight: '700' as const, fontVariant: ['tabular-nums'] as const },
 };
 
 export function useTheme() {

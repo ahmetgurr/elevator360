@@ -25,6 +25,22 @@ export function parseAmount(text: string): number {
 export const money = (v: string | number | null | undefined) => tl.format(num(v));
 export const moneyShort = (v: string | number | null | undefined) => tlCompact.format(num(v));
 
+/**
+ * Karsilama ekranindaki "Merhaba, ..." icin sunuma hazir isim. profiles.full_name
+ * bazen "Ad Soyad" yerine ham bir kullanici adi ("ahmetgur190758") tasiyabilir —
+ * boyle gorununce amator durmasin diye sondaki rakamlar atilip kalan metin
+ * buyuk harfle baslatilir (bkz. kullanici geri bildirimi).
+ */
+export function formatGreetingName(fullName: string | null | undefined): string {
+  const trimmed = (fullName ?? '').trim();
+  if (!trimmed) return '';
+  if (/\s/.test(trimmed)) return trimmed; // "Ad Soyad" gibi gorunuyor — oldugu gibi kullan
+
+  const stripped = trimmed.replace(/\d+$/, '');
+  if (!stripped) return '';
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
 const AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
                'Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 

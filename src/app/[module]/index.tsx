@@ -229,7 +229,7 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
                 Silik/kesikli kenarlı kartlar henüz gerçek kaydı açılmamış (öngörülen) siteleri gösterir.
               </Txt>
             )}
-            <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, alignItems: 'stretch' }}>
               <View style={{ flex: 1 }}>
                 <FilterDropdown
                   value={filter}
@@ -250,13 +250,13 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
                   onPress={() => setAddSiteOpen(true)}
                   style={({ pressed }) => ({
                     alignItems: 'center', justifyContent: 'center',
-                    paddingHorizontal: spacing.lg,
+                    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
                     backgroundColor: c.accentSoft,
                     borderRadius: radius.md,
                     opacity: pressed ? 0.7 : 1,
                   })}
                 >
-                  <Txt variant="h3" color={c.accent} style={{ fontWeight: '700' }}>+ Site Ekle</Txt>
+                  <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>+ Site Ekle</Txt>
                 </Pressable>
               )}
             </View>

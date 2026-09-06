@@ -4,9 +4,9 @@ import { useRouter, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { usePeriodSummary, useProjectedSummary } from '@/lib/api';
 import { moduleAccent, useTheme } from '@/lib/theme';
-import { currentPeriod, isFuturePeriod } from '@/lib/format';
+import { currentPeriod, formatGreetingName, isFuturePeriod } from '@/lib/format';
 import { MODULE_LABEL, type ModuleType } from '@/lib/types';
-import { Button, EmptyState, Txt } from '@/components/ui';
+import { Button, confirmDestructive, EmptyState, Txt } from '@/components/ui';
 import { CashSummaryPanel } from '@/components/ledger';
 
 const MODULE_DESC: Record<ModuleType, string> = {
@@ -35,6 +35,11 @@ export default function ModulePickerScreen() {
     { module: 'elevator' as ModuleType, projected: elevatorProjected.data },
     { module: 'cleaning' as ModuleType, projected: cleaningProjected.data },
   ].filter(e => modules.includes(e.module));
+  const displayName = formatGreetingName(profile?.full_name);
+
+  function handleSignOut() {
+    confirmDestructive('Çıkış Yap', 'Uygulamadan çıkmak istediğinize emin misiniz?', 'Çıkış', signOut);
+  }
 
   // Tek modul yetkisi varsa secim ekraninda oyalanma, dogrudan listeye gec.
   // push kullanilir (replace degil): boylece bu ekran yiginda kalir ve
@@ -51,7 +56,7 @@ export default function ModulePickerScreen() {
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <Pressable onPress={signOut} hitSlop={8}>
+        <Pressable onPress={handleSignOut} hitSlop={8}>
           <Txt variant="small" color={c.accent}>Çıkış</Txt>
         </Pressable>
       ),
@@ -61,7 +66,7 @@ export default function ModulePickerScreen() {
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
       <View style={{ gap: spacing.xs }}>
-        <Txt variant="h1">Merhaba{profile?.full_name ? `, ${profile.full_name}` : ''}</Txt>
+        <Txt variant="h1">Merhaba{displayName ? `, ${displayName}` : ''}</Txt>
         <Txt variant="small" color={c.textMuted}>Çalışmak istediğiniz modülü seçin.</Txt>
       </View>
 
@@ -105,7 +110,7 @@ export default function ModulePickerScreen() {
       )}
 
       {modules.length > 0 && (
-        <Button title="Çıkış yap" variant="ghost" onPress={signOut} style={{ marginTop: spacing.xl }} />
+        <Button title="Çıkış yap" variant="ghost" onPress={handleSignOut} style={{ marginTop: spacing.xl }} />
       )}
     </ScrollView>
   );

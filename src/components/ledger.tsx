@@ -310,14 +310,20 @@ export function SummaryStrip({ summary }: { summary: PeriodSummary | null | unde
 
       {/* Bu 4 sayi (tamamlandı+eksik+bekliyor+gecikmiş) HER ZAMAN site
           sayisina esittir — bkz. 0011 migration (birbiriyle kesisen
-          kategoriler yuzunden eskiden toplam tutmuyordu). */}
-      <View style={{ flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' }}>
+          kategoriler yuzunden eskiden toplam tutmuyordu). Dar ekranlarda
+          yan yana sigmadigi icin (bkz. kullanici geri bildirimi) yatay
+          kaydirilabilir bir seride gosterilir. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ flexDirection: 'row', gap: spacing.md }}
+      >
         <Txt variant="tiny" color={c.textFaint}>{summary.site_count} site</Txt>
         <Txt variant="tiny" color={c.ok}>{summary.completed_count} tamamlandı</Txt>
         <Txt variant="tiny" color={c.warn}>{summary.partial_count} eksik</Txt>
         <Txt variant="tiny" color={c.textMuted}>{summary.pending_count} bekliyor</Txt>
         <Txt variant="tiny" color={c.danger}>{summary.overdue_count} gecikmiş</Txt>
-      </View>
+      </ScrollView>
     </View>
   );
 }

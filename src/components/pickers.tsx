@@ -66,13 +66,13 @@ export function FilterDropdown<T extends string>({
           onPress={() => setOpen(true)}
           style={({ pressed }) => ({
             alignItems: 'center', justifyContent: 'center',
-            paddingHorizontal: spacing.lg,
+            paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
             backgroundColor: c.accentSoft,
             borderRadius: radius.md,
             opacity: pressed ? 0.7 : 1,
           })}
         >
-          <Txt variant="h3" color={c.accent} style={{ fontWeight: '700' }}>{compact.icon} {compact.label}</Txt>
+          <Txt variant="small" color={c.accent} numberOfLines={1} style={{ fontWeight: '700' }}>{compact.icon} {compact.label}</Txt>
         </Pressable>
       ) : (
         <Pressable
@@ -81,11 +81,11 @@ export function FilterDropdown<T extends string>({
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm,
             backgroundColor: pressed ? c.surfaceAlt : c.surface,
             borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
-            borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+            borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
           })}
         >
-          <Txt variant="h3" style={{ flex: 1 }} numberOfLines={1}>{current.label}</Txt>
-          <Txt variant="small" color={c.textMuted} numberOfLines={1} style={{ flexShrink: 0 }}>
+          <Txt variant="small" style={{ flex: 1, fontWeight: '700' }} numberOfLines={1}>{current.label}</Txt>
+          <Txt variant="tiny" color={c.textMuted} numberOfLines={1} style={{ flexShrink: 0 }}>
             {counts?.[value] !== undefined ? `${counts[value]} site  ▾` : '▾'}
           </Txt>
         </Pressable>

@@ -1,9 +1,28 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput,
+  ActivityIndicator, Alert, Animated, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput,
   TextInputProps, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
+
+/**
+ * Yıkıcı/kritik işlemler (hesaptan çıkış, veri silme) için tek satırlık
+ * onay — yanlışlıkla dokunmaya karşı (bkz. kullanıcı geri bildirimi).
+ * Native'de gerçek Alert.alert kullanılır; react-native-web'in Alert.alert'ı
+ * SESSİZCE HİÇBİR ŞEY YAPMAYAN bir stub olduğu için (callback hiç
+ * çağrılmaz — web'de "Çıkış" tuşu tamamen ölü görünürdü), web'de
+ * window.confirm'e düşer.
+ */
+export function confirmDestructive(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`)) onConfirm();
+    return;
+  }
+  Alert.alert(title, message, [
+    { text: 'Vazgeç', style: 'cancel' },
+    { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+  ]);
+}
 
 /* --------------------------------- Metin -------------------------------- */
 
@@ -95,8 +114,11 @@ export function Field({ label, hint, error, style, ...rest }: FieldProps) {
       <TextInput
         placeholderTextColor={c.textFaint}
         style={[{
-          backgroundColor: c.surface,
-          borderWidth: StyleSheet.hairlineWidth,
+          // Modalin kendi arkaplani (c.surface) ile AYNI tondaydi, sinirlar
+          // zor secilyordu (bkz. kullanici geri bildirimi) — bir ton daha
+          // acik olan surfaceAlt + belirgin (1px) kenarlik ile ayristirilir.
+          backgroundColor: c.surfaceAlt,
+          borderWidth: 1,
           borderColor: error ? c.danger : c.border,
           borderRadius: radius.md,
           paddingHorizontal: spacing.md,

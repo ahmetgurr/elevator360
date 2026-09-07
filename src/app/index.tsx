@@ -1,24 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useRouter, useNavigation } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { usePeriodSummary, useProjectedSummary } from '@/lib/api';
-import { moduleAccent, useTheme } from '@/lib/theme';
-import { currentPeriod, formatGreetingName, isFuturePeriod } from '@/lib/format';
+import { glassColors, useTheme } from '@/lib/theme';
+import { currentPeriod, formatGreetingName, isFuturePeriod, timeGreeting } from '@/lib/format';
 import { MODULE_LABEL, type ModuleType } from '@/lib/types';
-import { Button, confirmDestructive, EmptyState, Txt } from '@/components/ui';
+import { Txt, confirmDestructive } from '@/components/ui';
 import { CashSummaryPanel } from '@/components/ledger';
+import { GlassBackground, GlassCard } from '@/components/Glass';
 
 const MODULE_DESC: Record<ModuleType, string> = {
   elevator: 'Periyodik bakım, arıza, parça değişimi ve aylık tahsilat takibi',
   cleaning: 'Periyodik temizlik, ekstra işler ve aylık tahsilat takibi',
 };
 
+const MODULE_ICON: Record<ModuleType, string> = {
+  elevator: '🛗',
+  cleaning: '🧹',
+};
+
+const MODULE_ICON_BG: Record<ModuleType, string> = {
+  elevator: 'rgba(34,197,94,0.28)',
+  cleaning: 'rgba(37,99,235,0.28)',
+};
+
 export default function ModulePickerScreen() {
   const { profile, modules, signOut } = useAuth();
-  const { c, dark, spacing, radius } = useTheme();
+  const { spacing } = useTheme();
   const router = useRouter();
-  const navigation = useNavigation();
   const autoNavigated = useRef(false);
   const [period, setPeriod] = useState(currentPeriod());
   const [rangeOpen, setRangeOpen] = useState(false);
@@ -53,65 +63,91 @@ export default function ModulePickerScreen() {
     }
   }, [modules.join(',')]);
 
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable onPress={handleSignOut} hitSlop={8}>
-          <Txt variant="small" color={c.accent}>Çıkış</Txt>
-        </Pressable>
-      ),
-    });
-  }, [navigation, c.accent]);
-
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
-      <View style={{ gap: spacing.xs }}>
-        <Txt variant="h1">Merhaba{displayName ? `, ${displayName}` : ''}</Txt>
-        <Txt variant="small" color={c.textMuted}>Çalışmak istediğiniz modülü seçin.</Txt>
-      </View>
+    <GlassBackground>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}>
+        <View style={styles.headerRow}>
+          <View style={styles.headerBrand}>
+            <View style={styles.logoBadge}>
+              <Txt variant="h3" color={glassColors.textPrimary}>▲</Txt>
+            </View>
+            <Txt variant="h3" color={glassColors.textPrimary}>Elevator360</Txt>
+          </View>
+          <Pressable onPress={handleSignOut} hitSlop={8} style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.7 : 1 }]}>
+            <Txt variant="h3" color={glassColors.textPrimary}>⎋</Txt>
+          </Pressable>
+        </View>
 
-      {modules.length > 0 && (
-        <CashSummaryPanel
-          entries={summaryEntries}
-          projectedEntries={projectedEntries}
-          loading={elevatorSummary.isLoading || cleaningSummary.isLoading}
-          period={period}
-          onPeriodChange={setPeriod}
-          rangeOpen={rangeOpen}
-          onOpenRange={() => setRangeOpen(true)}
-          onCloseRange={() => setRangeOpen(false)}
-        />
-      )}
+        <View style={{ gap: spacing.xs }}>
+          <Txt variant="h1" color={glassColors.textPrimary}>
+            {timeGreeting()} {displayName || ''} 👋
+          </Txt>
+          <Txt variant="body" color={glassColors.textSecondary}>Bugün de her şey kontrol altında.</Txt>
+        </View>
 
-      {modules.length === 0 ? (
-        <EmptyState
-          title="Henüz modül yetkiniz yok"
-          detail="Sistem yöneticisinin hesabınıza asansör ve/veya temizlik modülü yetkisi tanımlaması gerekiyor."
-        />
-      ) : (
-        modules.map(m => {
-          const accent = dark ? moduleAccent[m].dark : moduleAccent[m].light;
-          return (
-            <Pressable
-              key={m}
-              onPress={() => router.push(`/${m}`)}
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? c.surfaceAlt : c.surface,
-                borderRadius: radius.lg, padding: spacing.xl, gap: spacing.sm,
-                borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
-                borderLeftWidth: 4, borderLeftColor: accent,
-              })}
-            >
-              <Txt variant="h2">{MODULE_LABEL[m]}</Txt>
-              <Txt variant="small" color={c.textMuted}>{MODULE_DESC[m]}</Txt>
-            </Pressable>
-          );
-        })
-      )}
+        {modules.length === 0 ? (
+          <GlassCard>
+            <View style={{ gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.lg }}>
+              <Txt variant="h3" color={glassColors.textPrimary}>Henüz modül yetkiniz yok</Txt>
+              <Txt variant="small" color={glassColors.textSecondary} style={{ textAlign: 'center' }}>
+                Sistem yöneticisinin hesabınıza asansör ve/veya temizlik modülü yetkisi tanımlaması gerekiyor.
+              </Txt>
+            </View>
+          </GlassCard>
+        ) : (
+          <>
+            <GlassCard>
+              <CashSummaryPanel
+                entries={summaryEntries}
+                projectedEntries={projectedEntries}
+                loading={elevatorSummary.isLoading || cleaningSummary.isLoading}
+                period={period}
+                onPeriodChange={setPeriod}
+                rangeOpen={rangeOpen}
+                onOpenRange={() => setRangeOpen(true)}
+                onCloseRange={() => setRangeOpen(false)}
+              />
+            </GlassCard>
 
-      {modules.length > 0 && (
-        <Button title="Çıkış yap" variant="ghost" onPress={handleSignOut} style={{ marginTop: spacing.xl }} />
-      )}
-    </ScrollView>
+            <View style={{ flexDirection: 'row', gap: spacing.md }}>
+              {modules.map(m => (
+                <Pressable key={m} onPress={() => router.push(`/${m}`)} style={{ flex: 1 }}>
+                  <GlassCard style={{ flex: 1 }} contentStyle={{ gap: spacing.sm, minHeight: 168, justifyContent: 'space-between' }}>
+                    <View style={[styles.moduleIconBadge, { backgroundColor: MODULE_ICON_BG[m] }]}>
+                      <Txt style={styles.moduleIconGlyph}>{MODULE_ICON[m]}</Txt>
+                    </View>
+                    <View style={{ gap: 2 }}>
+                      <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1}>{MODULE_LABEL[m]}</Txt>
+                      <Txt variant="tiny" color={glassColors.textSecondary} numberOfLines={2}>{MODULE_DESC[m]}</Txt>
+                    </View>
+                  </GlassCard>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
+      </ScrollView>
+    </GlassBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  logoBadge: {
+    width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: glassColors.cardBg, borderWidth: 1, borderColor: glassColors.cardBorder,
+    overflow: 'hidden',
+  },
+  iconBtn: {
+    width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: glassColors.cardBg, borderWidth: 1, borderColor: glassColors.cardBorder,
+  },
+  moduleIconBadge: {
+    width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  moduleIconGlyph: {
+    fontSize: 20, lineHeight: 24, textAlign: 'center',
+  },
+});

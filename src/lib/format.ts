@@ -41,6 +41,15 @@ export function formatGreetingName(fullName: string | null | undefined): string 
   return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
+/** Gunun saatine gore Ana Ekran karsilama basligi ("İyi Günler" vb.) */
+export function timeGreeting(date: Date = new Date()): string {
+  const h = date.getHours();
+  if (h >= 23 || h < 6) return 'İyi Geceler';
+  if (h < 12) return 'Günaydın';
+  if (h < 18) return 'İyi Günler';
+  return 'İyi Akşamlar';
+}
+
 const AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
                'Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 

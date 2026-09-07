@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useTheme } from '@/lib/theme';
+import { glassColors, useTheme } from '@/lib/theme';
 import { usePostTransaction, useSiteHistory, useUpdateNote } from '@/lib/api';
 import { currentPeriod, money, num, parseAmount, periodFileLabel, periodLabel } from '@/lib/format';
 import { exportSiteStatementCsv } from '@/lib/export';
@@ -8,6 +8,7 @@ import { finalBalanceState, overpaidAmount, type LedgerRow, type ModuleType } fr
 import { StatusPill } from './ledger';
 import { EditSiteModal } from './EditSiteModal';
 import { Button, ConfirmModal, Field, ModalShell, Txt } from './ui';
+import { GlassSurface, ModalBackdrop } from './Glass';
 
 /** Cift dokunma kalkani: modal her acildiginda benzersiz bir istek kimligi uretilir */
 function makeRequestId(): string {
@@ -138,7 +139,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
     <ModalShell visible={visible} onClose={handleClose} keyboardAvoiding maxHeightRatio={0.88}>
             <View style={{
               padding: spacing.lg, flexShrink: 0,
-              borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+              borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder,
               flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm,
             }}>
               <View style={{ flex: 1, gap: 2 }}>
@@ -150,7 +151,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                 hitSlop={8}
                 style={({ pressed }) => ({
                   paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
-                  borderRadius: radius.sm, backgroundColor: pressed ? c.surfaceAlt : 'transparent',
+                  borderRadius: radius.sm, backgroundColor: pressed ? glassColors.cardBgSoft : 'transparent',
                 })}
               >
                 <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>📋 Tüm Ayları Görüntüle</Txt>
@@ -161,7 +162,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                   hitSlop={8}
                   style={({ pressed }) => ({
                     paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
-                    borderRadius: radius.sm, backgroundColor: pressed ? c.surfaceAlt : 'transparent',
+                    borderRadius: radius.sm, backgroundColor: pressed ? glassColors.cardBgSoft : 'transparent',
                   })}
                 >
                   <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>✎ Düzenle</Txt>
@@ -261,7 +262,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                     style={({ pressed }) => ({
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                       paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
-                      backgroundColor: pressed ? c.border : c.surfaceAlt, borderRadius: radius.sm,
+                      backgroundColor: pressed ? glassColors.cardBorder : glassColors.cardBgSoft, borderRadius: radius.sm,
                     })}
                   >
                     <Txt variant="small" color={c.textMuted}>{periodLabel(h.period)}</Txt>
@@ -290,9 +291,9 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                       key={n.ledgerId}
                       onPress={() => setEditingNote(n)}
                       style={({ pressed }) => ({
-                        backgroundColor: pressed ? c.border : c.surfaceAlt,
+                        backgroundColor: pressed ? glassColors.cardBorder : glassColors.cardBgSoft,
                         borderRadius: radius.md, padding: spacing.md, gap: 2,
-                        borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
+                        borderWidth: StyleSheet.hairlineWidth, borderColor: glassColors.cardBorder,
                       })}
                     >
                       <Txt variant="tiny" color={c.accent}>{periodLabel(n.period)}</Txt>
@@ -309,7 +310,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
 
             <View style={{
               flexDirection: 'row', gap: spacing.md, padding: spacing.lg, flexShrink: 0,
-              borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
+              borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: glassColors.cardBorder,
             }}>
               <Button title="Vazgeç" variant="secondary" onPress={handleClose}
                       disabled={mutation.isPending} style={{ flex: 1 }} />
@@ -386,7 +387,7 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
     <ModalShell visible={visible} onClose={onClose} maxHeightRatio={0.85}>
           <View style={{
             padding: spacing.lg, gap: spacing.sm, flexShrink: 0,
-            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder,
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
               <View style={{ flex: 1, gap: 2 }}>
@@ -435,7 +436,9 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
                 <View
                   key={r.ledger_id}
                   style={{
-                    backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md, gap: spacing.xs,
+                    backgroundColor: 'transparent',
+                    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)',
+                    paddingTop: spacing.md, gap: spacing.xs,
                     borderWidth: r.ledger_id === currentRow.ledger_id ? 1 : 0,
                     borderColor: c.accent,
                   }}
@@ -460,7 +463,7 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
             )}
           </ScrollView>
 
-          <View style={{ padding: spacing.lg, flexShrink: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border }}>
+          <View style={{ padding: spacing.lg, flexShrink: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: glassColors.cardBorder }}>
             <Button title="Kapat" variant="secondary" onPress={onClose} />
           </View>
     </ModalShell>
@@ -518,16 +521,15 @@ function NoteEditModal({ note, siteId, updateNote, onClose, onSaved }: {
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent statusBarTranslucent animationType="fade" onRequestClose={onClose}>
       <Pressable
         onPress={onClose}
-        style={{ flex: 1, backgroundColor: 'rgba(11,21,38,0.55)', justifyContent: 'center', padding: spacing.xl }}
+        style={[StyleSheet.absoluteFill, { justifyContent: 'center', padding: spacing.xl }]}
       >
-        <Pressable
-          onPress={e => e.stopPropagation()}
-          style={{ backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}
-        >
-          <Txt variant="h3">{periodLabel(note.period)} Notu</Txt>
+        <ModalBackdrop />
+        <Pressable onPress={e => e.stopPropagation()}>
+          <GlassSurface style={{ padding: spacing.lg, gap: spacing.md }}>
+          <Txt variant="h3" color={glassColors.textPrimary}>{periodLabel(note.period)} Notu</Txt>
 
           {note.isLocked ? (
             <>
@@ -559,6 +561,7 @@ function NoteEditModal({ note, siteId, updateNote, onClose, onSaved }: {
               </View>
             </>
           )}
+          </GlassSurface>
         </Pressable>
       </Pressable>
 

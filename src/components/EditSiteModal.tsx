@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useTheme } from '@/lib/theme';
+import { glassColors, useTheme } from '@/lib/theme';
 import {
   useDeactivateSite, useReactivateSite, useSetSiteStartPeriod, useSite, useUpdateSiteDetails,
 } from '@/lib/api';
@@ -153,7 +153,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
     <ModalShell visible={visible} onClose={handleClose} keyboardAvoiding maxHeightRatio={0.88}>
             <View style={{
               padding: spacing.lg, gap: 2, flexShrink: 0,
-              borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+              borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder,
             }}>
               <Txt variant="h3">Site Bilgilerini Düzenle</Txt>
               {!!site.data && (
@@ -176,8 +176,9 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                 >
                   {!site.data.is_active && (
                     <View style={{
-                      backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md, gap: 2,
-                      borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
+                      backgroundColor: 'transparent',
+                      borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)',
+                      paddingTop: spacing.md, gap: 2,
                     }}>
                       <Txt variant="small" color={c.textMuted} style={{ fontWeight: '700' }}>Bu site pasif (sözleşme feshedilmiş)</Txt>
                       <Txt variant="tiny" color={c.textFaint}>Geçmiş bilanço kayıtları korunuyor; yeni dönem açılmıyor.</Txt>
@@ -240,7 +241,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                   </View>
 
                   <View style={{
-                    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
+                    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: glassColors.cardBorder,
                     paddingTop: spacing.lg, gap: spacing.sm,
                   }}>
                     {site.data.is_active ? (
@@ -282,7 +283,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
 
                 <View style={{
                   flexDirection: 'row', gap: spacing.md, padding: spacing.lg, flexShrink: 0,
-                  borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
+                  borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: glassColors.cardBorder,
                 }}>
                   <Button title="Vazgeç" variant="secondary" onPress={handleClose}
                           disabled={busy} style={{ flex: 1 }} />

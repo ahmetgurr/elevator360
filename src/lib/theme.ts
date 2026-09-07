@@ -6,7 +6,6 @@
  * uzerinden kullanilir; bilesenlerde ham hex yazilmaz.
  */
 import React, { createContext, useContext } from 'react';
-import { useColorScheme } from 'react-native';
 import type { ModuleType } from './types';
 
 const palette = {
@@ -165,14 +164,67 @@ export function ModuleThemeProvider({ module, children }: { module: ModuleType; 
 }
 
 /** `module` verilirse context'i ezer — ekranin kendisi Provider'i sarmadan ONCE kendi rengini bilmek icin kullanir */
+/**
+ * Uygulama artik her ekranda buzlu cam / fotografli arka plan kullaniyor
+ * (bkz. GlassBackground, kok layout'a tek sefer monte edilir). Bu yuzden
+ * c.* token'lari ARTIK sistem acik/koyu temasini degil, HER ZAMAN koyu
+ * paleti dondurur — aksi halde acik sistem temasinda koyu metin/opak beyaz
+ * yuzeyler fotografin uzerinde okunmaz hale gelirdi.
+ */
 export function useTheme(module?: ModuleType) {
-  const scheme = useColorScheme();
   const ctxModule = useContext(ModuleThemeContext);
   const activeModule = module ?? ctxModule;
-  const isDark = scheme === 'dark';
-  const c = activeModule === 'cleaning' ? (isDark ? darkCleaning : lightCleaning) : (isDark ? dark : light);
+  const isDark = true;
+  const c = activeModule === 'cleaning' ? darkCleaning : dark;
   return { c, dark: isDark, spacing, radius, font };
 }
+
+/**
+ * Glassmorphism (Buzlu Cam) tasarim dili — SADECE Ana Ekran (Dashboard) ve
+ * giris ekraninda kullanilir. Sistem acik/koyu temasindan BAGIMSIZ, sabit
+ * bir palettir (arka plan her zaman fotografli/koyu oldugu icin acik temada
+ * bile beyaza yakin metin gerekir) — bu yuzden light/dark Colors sisteminden
+ * ayri tutulur.
+ */
+export const glassColors = {
+  primary: '#2563EB',
+  primaryLight: '#60A5FA',
+  accent: '#22C55E',
+  accentLight: '#4ADE80',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  textPrimary: '#F8FAFC',
+  textSecondary: '#CBD5E1',
+  cardBg: 'rgba(255,255,255,0.05)',
+  cardBorder: 'rgba(255,255,255,0.15)',
+  cardBgSoft: 'rgba(255,255,255,0.07)',
+  inputBg: 'rgba(255,255,255,0.12)',
+  inputBorder: 'rgba(255,255,255,0.20)',
+  /** Blursuz ogeler icin (liste satirlari, dip kutular): keskin fotografin
+   * uzerinde metin okunurlugu icin daha koyu, dogrudan (blursuz) saydamlik. */
+  rowBg: 'rgba(5,15,30,0.55)',
+  rowBgPressed: 'rgba(5,15,30,0.68)',
+  scrimDark: 'rgba(5,20,40,0.58)',
+  scrimBlue: 'rgba(37,99,235,0.08)',
+  trackBg: 'rgba(255,255,255,0.20)',
+  /** Modal/popup arka planlarindaki koyu perde — altindaki liste/ekran
+   * metniyle modalin kendi icerigi birbirine girmesin diye NEREDEYSE opak
+   * (bkz. kullanici geri bildirimi: "arkadaki yazilarla modal ici yazilar
+   * birbirine giriyor", iki modal ust uste acildiginda daha da kotu). */
+  modalScrim: 'rgba(5,10,25,0.95)',
+} as const;
+
+/** Buyuk rakamlarin (Toplam Beklenen, Kalan Alacak vb.) fotografli arka planda okunurlugunu artiran hafif metin golgesi. */
+export const glassTextShadow = {
+  textShadowColor: 'rgba(0,0,0,0.6)',
+  textShadowOffset: { width: 0, height: 1 },
+  textShadowRadius: 4,
+} as const;
+
+export const glassGradients = {
+  primary: ['#60A5FA', '#2563EB'] as const,
+  positive: ['#4ADE80', '#22C55E'] as const,
+};
 
 /** Bilanco durumlarinin renk esleri (v_ledger.status_key ile birebir) */
 export function statusColors(c: Colors, key: string) {

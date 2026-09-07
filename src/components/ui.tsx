@@ -3,7 +3,8 @@ import {
   ActivityIndicator, Alert, Animated, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput,
   TextInputProps, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
-import { useTheme } from '@/lib/theme';
+import { glassColors, useTheme } from '@/lib/theme';
+import { GlassCard, GlassSurface, ModalBackdrop } from './Glass';
 
 /**
  * Yıkıcı/kritik işlemler (hesaptan çıkış, veri silme) için tek satırlık
@@ -46,15 +47,7 @@ export function Txt({ children, variant = 'body', color, style, numberOfLines }:
 /* --------------------------------- Kart --------------------------------- */
 
 export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
-  const { c, radius, spacing } = useTheme();
-  return (
-    <View style={[{
-      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.lg,
-      borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
-    }, style]}>
-      {children}
-    </View>
-  );
+  return <GlassCard contentStyle={style}>{children}</GlassCard>;
 }
 
 /* -------------------------------- Buton --------------------------------- */
@@ -73,11 +66,11 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading,
   const bg =
     variant === 'primary'   ? c.accent :
     variant === 'danger'    ? c.danger :
-    variant === 'secondary' ? c.surfaceAlt : 'transparent';
+    variant === 'secondary' ? glassColors.cardBg : 'transparent';
   const fg =
     variant === 'primary' ? c.onAccent :
     variant === 'danger'  ? '#FFFFFF' :
-    variant === 'ghost'   ? c.accent : c.text;
+    variant === 'ghost'   ? c.accent : glassColors.textPrimary;
 
   return (
     <Pressable
@@ -91,8 +84,8 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading,
         alignItems: 'center',
         justifyContent: 'center',
         opacity: disabled ? 0.45 : pressed ? 0.8 : 1,
-        borderWidth: variant === 'ghost' ? StyleSheet.hairlineWidth : 0,
-        borderColor: c.border,
+        borderWidth: variant === 'ghost' || variant === 'secondary' ? 1 : 0,
+        borderColor: glassColors.cardBorder,
       }, style]}
     >
       {loading
@@ -110,26 +103,23 @@ export function Field({ label, hint, error, style, ...rest }: FieldProps) {
   const { c, radius, spacing, font } = useTheme();
   return (
     <View style={{ gap: spacing.xs }}>
-      <Text style={[font.small, { color: c.textMuted, fontWeight: '600' }]}>{label}</Text>
+      <Text style={[font.small, { color: glassColors.textSecondary, fontWeight: '600' }]}>{label}</Text>
       <TextInput
-        placeholderTextColor={c.textFaint}
+        placeholderTextColor={glassColors.textSecondary}
         style={[{
-          // Modalin kendi arkaplani (c.surface) ile AYNI tondaydi, sinirlar
-          // zor secilyordu (bkz. kullanici geri bildirimi) — bir ton daha
-          // acik olan surfaceAlt + belirgin (1px) kenarlik ile ayristirilir.
-          backgroundColor: c.surfaceAlt,
+          backgroundColor: glassColors.inputBg,
           borderWidth: 1,
-          borderColor: error ? c.danger : c.border,
+          borderColor: error ? c.danger : glassColors.inputBorder,
           borderRadius: radius.md,
           paddingHorizontal: spacing.md,
           paddingVertical: spacing.md,
           fontSize: 16,
-          color: c.text,
+          color: glassColors.textPrimary,
         }, style]}
         {...rest}
       />
       {!!error && <Text style={[font.small, { color: c.danger }]}>{error}</Text>}
-      {!error && !!hint && <Text style={[font.small, { color: c.textFaint }]}>{hint}</Text>}
+      {!error && !!hint && <Text style={[font.small, { color: glassColors.textSecondary }]}>{hint}</Text>}
     </View>
   );
 }
@@ -229,7 +219,7 @@ export function ModalShell({ visible, onClose, keyboardAvoiding, maxHeightRatio 
   maxHeightRatio?: number;
   children: React.ReactNode;
 }) {
-  const { c, spacing, radius } = useTheme();
+  const { spacing } = useTheme();
   const { height: windowHeight } = useWindowDimensions();
   const Wrapper: any = keyboardAvoiding ? KeyboardAvoidingView : View;
   const wrapperProps = keyboardAvoiding
@@ -237,19 +227,15 @@ export function ModalShell({ visible, onClose, keyboardAvoiding, maxHeightRatio 
     : { style: { flex: 1 } };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent statusBarTranslucent animationType="fade" onRequestClose={onClose}>
       <Wrapper {...wrapperProps}>
-        <Pressable
-          onPress={onClose}
-          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(11,21,38,0.55)' }]}
-        />
+        <Pressable onPress={onClose} style={StyleSheet.absoluteFill}>
+          <ModalBackdrop />
+        </Pressable>
         <View pointerEvents="box-none" style={{ flex: 1, justifyContent: 'center', padding: spacing.xl }}>
-          <View style={{
-            backgroundColor: c.surface, borderRadius: radius.lg, overflow: 'hidden',
-            maxHeight: windowHeight * maxHeightRatio, flexShrink: 1,
-          }}>
+          <GlassSurface style={{ maxHeight: windowHeight * maxHeightRatio, flexShrink: 1 }}>
             {children}
-          </View>
+          </GlassSurface>
         </View>
       </Wrapper>
     </Modal>
@@ -266,24 +252,24 @@ export function ConfirmModal({
   confirmLabel?: string; cancelLabel?: string; danger?: boolean; loading?: boolean;
   onConfirm: () => void; onCancel: () => void;
 }) {
-  const { c, spacing, radius } = useTheme();
+  const { spacing } = useTheme();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal visible={visible} transparent statusBarTranslucent animationType="fade" onRequestClose={onCancel}>
       <Pressable
         onPress={onCancel}
-        style={{ flex: 1, backgroundColor: 'rgba(11,21,38,0.55)', justifyContent: 'center', padding: spacing.xl }}
+        style={[StyleSheet.absoluteFill, { justifyContent: 'center', padding: spacing.xl }]}
       >
-        <Pressable
-          onPress={e => e.stopPropagation()}
-          style={{ backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}
-        >
-          <Txt variant="h3">{title}</Txt>
-          {!!message && <Txt variant="small" color={c.textMuted}>{message}</Txt>}
-          <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
-            <Button title={cancelLabel} variant="secondary" onPress={onCancel} disabled={loading} style={{ flex: 1 }} />
-            <Button title={confirmLabel} variant={danger ? 'danger' : 'primary'}
-                    onPress={onConfirm} loading={loading} style={{ flex: 1 }} />
-          </View>
+        <ModalBackdrop />
+        <Pressable onPress={e => e.stopPropagation()}>
+          <GlassSurface style={{ padding: spacing.lg, gap: spacing.md }}>
+            <Txt variant="h3" color={glassColors.textPrimary}>{title}</Txt>
+            {!!message && <Txt variant="small" color={glassColors.textSecondary}>{message}</Txt>}
+            <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
+              <Button title={cancelLabel} variant="secondary" onPress={onCancel} disabled={loading} style={{ flex: 1 }} />
+              <Button title={confirmLabel} variant={danger ? 'danger' : 'primary'}
+                      onPress={onConfirm} loading={loading} style={{ flex: 1 }} />
+            </View>
+          </GlassSurface>
         </Pressable>
       </Pressable>
     </Modal>
@@ -294,9 +280,9 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
   const { c, spacing } = useTheme();
   return (
     <View style={{ padding: spacing.xl, gap: spacing.md }}>
-      <Card style={{ borderColor: c.danger, gap: spacing.sm }}>
+      <Card style={{ gap: spacing.sm }}>
         <Txt variant="h3" color={c.danger}>Bir sorun oluştu</Txt>
-        <Txt variant="small" color={c.textMuted}>{message}</Txt>
+        <Txt variant="small" color={glassColors.textSecondary}>{message}</Txt>
         {!!onRetry && <Button title="Tekrar dene" variant="secondary" onPress={onRetry} />}
       </Card>
     </View>

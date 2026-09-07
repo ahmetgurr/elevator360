@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { moduleAccent, statusColors, useTheme } from '@/lib/theme';
+import { glassColors, glassTextShadow, moduleAccent, statusColors, useTheme } from '@/lib/theme';
 import { currentPeriod, dayLabel, isFuturePeriod, money, moneyShort, num, periodLabel } from '@/lib/format';
 import {
   MODULE_LABEL, finalBalanceState, isUnrealizedFuture, overpaidAmount,
@@ -9,6 +9,7 @@ import {
 import { useRangeSummary, type ProjectedSite, type RangePeriodSummary } from '@/lib/api';
 import { PeriodSwitcher } from './pickers';
 import { ModalShell, Txt } from './ui';
+import { GlassCard, GlassProgressBar, GradientButton } from './Glass';
 
 /* ------------------------------ Durum rozeti ---------------------------- */
 
@@ -49,14 +50,14 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
       <Pressable
         onPress={() => onPress(row)}
         style={({ pressed }) => ({
-          backgroundColor: pressed ? c.surfaceAlt : c.surface,
+          backgroundColor: pressed ? glassColors.rowBgPressed : glassColors.rowBg,
           borderRadius: radius.lg,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: c.border,
+          borderWidth: 1,
+          borderColor: glassColors.cardBorder,
           borderStyle: 'dashed',
           padding: spacing.lg,
           gap: spacing.sm,
-          opacity: 0.6,
+          opacity: 0.7,
         })}
       >
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
@@ -108,10 +109,10 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
     <Pressable
       onPress={() => onPress(row)}
       style={({ pressed }) => ({
-        backgroundColor: pressed ? c.surfaceAlt : c.surface,
+        backgroundColor: pressed ? glassColors.rowBgPressed : glassColors.rowBg,
         borderRadius: radius.lg,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: c.border,
+        borderWidth: 1,
+        borderColor: glassColors.cardBorder,
         padding: spacing.lg,
         gap: spacing.sm,
         opacity: !isActive ? 0.6 : 1,
@@ -220,7 +221,7 @@ function Amount({ label, value, color, strong }: {
   return (
     <View style={{ gap: 1 }}>
       <Txt variant="tiny" color={c.textFaint}>{label}</Txt>
-      <Txt variant={strong ? 'money' : 'moneySm'} color={color}>{money(value)}</Txt>
+      <Txt variant={strong ? 'money' : 'moneySm'} color={color} style={glassTextShadow}>{money(value)}</Txt>
     </View>
   );
 }
@@ -242,14 +243,14 @@ export function ProjectedSiteListItem({ site, onPress }: {
     <Pressable
       onPress={() => onPress(site)}
       style={({ pressed }) => ({
-        backgroundColor: pressed ? c.surfaceAlt : c.surface,
+        backgroundColor: pressed ? glassColors.rowBgPressed : glassColors.rowBg,
         borderRadius: radius.lg,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: c.border,
+        borderWidth: 1,
+        borderColor: glassColors.cardBorder,
         borderStyle: 'dashed',
         padding: spacing.lg,
         gap: spacing.sm,
-        opacity: 0.6,
+        opacity: 0.7,
       })}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
@@ -258,7 +259,7 @@ export function ProjectedSiteListItem({ site, onPress }: {
           <Txt variant="tiny" color={c.textFaint}>{site.site_code} · {dayLabel(site.service_day)}</Txt>
         </View>
         <View style={{
-          backgroundColor: c.surfaceAlt, borderRadius: radius.pill,
+          backgroundColor: glassColors.cardBgSoft, borderRadius: radius.pill,
           paddingHorizontal: spacing.sm, paddingVertical: 2,
         }}>
           <Txt variant="tiny" color={c.textFaint} style={{ fontWeight: '700' }}>Zamanı Gelmedi</Txt>
@@ -273,39 +274,32 @@ export function ProjectedSiteListItem({ site, onPress }: {
 /* ---------------------------- Donem ozet kartlari ----------------------- */
 
 export function SummaryStrip({ summary }: { summary: PeriodSummary | null | undefined }) {
-  const { c, spacing, radius } = useTheme();
+  const { spacing } = useTheme();
   if (!summary) return null;
 
   const rate = Math.round(num(summary.collection_rate_pct));
+  const rateTier = rate >= 80 ? 'positive' : rate >= 40 ? 'primary' : 'danger';
 
   return (
-    <View style={{
-      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.lg,
-      borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, gap: spacing.md,
-    }}>
+    <GlassCard contentStyle={{ gap: spacing.md }}>
       {/* Mobilde tek satira sigmaya calisip kesilmesin diye: Beklenen
           ustte tek basina genis, Tahsil/Kalan altta yan yana (bkz.
           saha geri bildirimi). */}
       <View style={{ gap: spacing.sm }}>
-        <Stat label="Beklenen" value={moneyShort(summary.total_expected)} color={c.text} full />
+        <Stat label="Beklenen" value={moneyShort(summary.total_expected)} color={glassColors.textPrimary} full />
         <View style={{ flexDirection: 'row', gap: spacing.lg }}>
-          <Stat label="Tahsil" value={moneyShort(summary.total_collected)} color={c.ok} />
-          <Stat label="Kalan"  value={moneyShort(summary.total_balance)}  color={c.danger} />
+          <Stat label="Tahsil" value={moneyShort(summary.total_collected)} color={glassColors.accentLight} />
+          <Stat label="Kalan"  value={moneyShort(summary.total_balance)}  color={glassColors.danger} />
         </View>
       </View>
 
       {/* Tahsilat orani */}
       <View style={{ gap: spacing.xs }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Txt variant="tiny" color={c.textFaint}>Tahsilat oranı</Txt>
-          <Txt variant="tiny" color={c.textMuted}>%{rate}</Txt>
+          <Txt variant="tiny" color={glassColors.textSecondary}>Tahsilat oranı</Txt>
+          <Txt variant="tiny" color={glassColors.textPrimary}>%{rate}</Txt>
         </View>
-        <View style={{ height: 6, backgroundColor: c.surfaceAlt, borderRadius: radius.pill, overflow: 'hidden' }}>
-          <View style={{
-            width: `${Math.min(100, Math.max(0, rate))}%`, height: '100%',
-            backgroundColor: rate >= 80 ? c.ok : rate >= 40 ? c.accent : c.danger,
-          }} />
-        </View>
+        <GlassProgressBar value={rate} tier={rateTier} />
       </View>
 
       {/* Bu 4 sayi (tamamlandı+eksik+bekliyor+gecikmiş) HER ZAMAN site
@@ -318,22 +312,21 @@ export function SummaryStrip({ summary }: { summary: PeriodSummary | null | unde
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ flexDirection: 'row', gap: spacing.md }}
       >
-        <Txt variant="tiny" color={c.textFaint}>{summary.site_count} site</Txt>
-        <Txt variant="tiny" color={c.ok}>{summary.completed_count} tamamlandı</Txt>
-        <Txt variant="tiny" color={c.warn}>{summary.partial_count} eksik</Txt>
-        <Txt variant="tiny" color={c.textMuted}>{summary.pending_count} bekliyor</Txt>
-        <Txt variant="tiny" color={c.danger}>{summary.overdue_count} gecikmiş</Txt>
+        <Txt variant="tiny" color={glassColors.textSecondary}>{summary.site_count} site</Txt>
+        <Txt variant="tiny" color={glassColors.accentLight}>{summary.completed_count} tamamlandı</Txt>
+        <Txt variant="tiny" color={glassColors.warning}>{summary.partial_count} eksik</Txt>
+        <Txt variant="tiny" color={glassColors.textSecondary}>{summary.pending_count} bekliyor</Txt>
+        <Txt variant="tiny" color={glassColors.danger}>{summary.overdue_count} gecikmiş</Txt>
       </ScrollView>
-    </View>
+    </GlassCard>
   );
 }
 
 function Stat({ label, value, color, full }: { label: string; value: string; color: string; full?: boolean }) {
-  const { c } = useTheme();
   return (
     <View style={{ gap: 2, flex: full ? undefined : 1 }}>
-      <Txt variant="tiny" color={c.textFaint}>{label}</Txt>
-      <Txt variant={full ? 'moneyLg' : 'money'} color={color} numberOfLines={1}>{value}</Txt>
+      <Txt variant="tiny" color={glassColors.textSecondary}>{label}</Txt>
+      <Txt variant={full ? 'moneyLg' : 'money'} color={color} numberOfLines={1} style={glassTextShadow}>{value}</Txt>
     </View>
   );
 }
@@ -348,20 +341,17 @@ function Stat({ label, value, color, full }: { label: string; value: string; col
 export function ProjectedSummaryCard({ siteCount, totalExpected }: {
   siteCount: number; totalExpected: number;
 }) {
-  const { c, spacing, radius } = useTheme();
+  const { spacing } = useTheme();
   return (
-    <View style={{
-      backgroundColor: c.surfaceAlt, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm,
-      borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, borderStyle: 'dashed',
-    }}>
-      <Txt variant="tiny" color={c.textFaint} style={{ fontWeight: '700' }}>📅 ÖNGÖRÜLEN BİLANÇO</Txt>
-      <Txt variant="moneyLg" color={c.textMuted} numberOfLines={1}>{money(totalExpected)}</Txt>
-      <Txt variant="tiny" color={c.textFaint}>
+    <GlassCard contentStyle={{ gap: spacing.sm }}>
+      <Txt variant="tiny" color={glassColors.textSecondary} style={{ fontWeight: '700' }}>📅 ÖNGÖRÜLEN BİLANÇO</Txt>
+      <Txt variant="moneyLg" color={glassColors.textPrimary} numberOfLines={1} style={glassTextShadow}>{money(totalExpected)}</Txt>
+      <Txt variant="tiny" color={glassColors.textSecondary}>
         {siteCount > 0
           ? `${siteCount} aktif sitenin güncel ücretlerine göre tahmindir; bu dönem henüz açılmadı.`
           : 'Bu dönemde aktif site bulunmuyor.'}
       </Txt>
-    </View>
+    </GlassCard>
   );
 }
 
@@ -415,7 +405,7 @@ export function CashSummaryPanel({
   onOpenRange?: () => void;
   onCloseRange?: () => void;
 }) {
-  const { c, dark, spacing, radius } = useTheme();
+  const { dark, spacing, radius } = useTheme();
   const [expanded, setExpanded] = useState(false);
 
   const hasAnyRealData = entries.some(e => !!e.summary);
@@ -445,33 +435,28 @@ export function CashSummaryPanel({
     { expected: 0, collected: 0, balance: 0 },
   );
   const rate = totals.expected > 0 ? Math.round((totals.collected / totals.expected) * 100) : 0;
+  const rateTier = rate >= 80 ? 'positive' : rate >= 40 ? 'primary' : 'danger';
   const hasBreakdown = rows.length > 1;
 
   return (
-    <View style={{
-      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.xl, gap: spacing.lg,
-      borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
-      borderTopWidth: 4, borderTopColor: c.accent,
-    }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
-        <Txt variant="h3" color={c.textMuted}>Genel Kasa Özeti</Txt>
-        <View style={{ flex: 1, maxWidth: 220 }}>
-          <PeriodSwitcher period={period} onChange={onPeriodChange} />
-        </View>
+    <View style={{ gap: spacing.lg }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
+        <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1} style={{ flexShrink: 1, paddingTop: 4 }}>Genel Kasa Özeti</Txt>
+        <PeriodSwitcher period={period} onChange={onPeriodChange} compact />
       </View>
 
       {loading ? (
-        <Txt variant="small" color={c.textFaint}>Hesaplanıyor…</Txt>
+        <Txt variant="small" color={glassColors.textSecondary}>Hesaplanıyor…</Txt>
       ) : showEmpty ? (
-        <Txt variant="small" color={c.textFaint}>Bu dönem için henüz veri yok.</Txt>
+        <Txt variant="small" color={glassColors.textSecondary}>Bu dönem için henüz veri yok.</Txt>
       ) : (
         <>
           {isProjection && (
             <View style={{
-              backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md,
-              borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, borderStyle: 'dashed',
+              backgroundColor: 'transparent',
+              borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: spacing.md,
             }}>
-              <Txt variant="tiny" color={c.textFaint} style={{ fontWeight: '700' }}>
+              <Txt variant="tiny" color={glassColors.textSecondary} style={{ fontWeight: '700' }}>
                 📅 ÖNGÖRÜLEN BİLANÇO — aktif sitelerin güncel ücretlerine göre tahmini; bu dönem henüz açılmadı.
               </Txt>
             </View>
@@ -484,21 +469,24 @@ export function CashSummaryPanel({
             <View style={{ gap: spacing.md }}>
               <BigStat
                 label="Toplam Beklenen" value={totals.expected}
-                color={isProjection ? c.textMuted : c.text} full
+                color={isProjection ? glassColors.textSecondary : glassColors.textPrimary}
+                labelColor={glassColors.textSecondary} full
               />
               <View style={{ flexDirection: 'row', gap: spacing.lg }}>
                 <BigStat
                   label="Tahsil Edilen" value={totals.collected}
-                  color={isProjection ? c.textFaint : c.ok}
+                  color={isProjection ? glassColors.textSecondary : glassColors.accentLight}
+                  labelColor={glassColors.textSecondary}
                 />
                 <BigStat
                   label="Kalan Alacak" value={totals.balance}
-                  color={isProjection ? c.textFaint : c.danger}
+                  color={isProjection ? glassColors.textSecondary : glassColors.danger}
+                  labelColor={glassColors.textSecondary}
                 />
               </View>
             </View>
             {hasBreakdown && (
-              <Txt variant="tiny" color={c.accent} style={{ marginTop: spacing.sm, fontWeight: '700' }}>
+              <Txt variant="tiny" color={glassColors.primaryLight} style={{ marginTop: spacing.sm, fontWeight: '700' }}>
                 {expanded ? '▴ Modül bazlı dökümü gizle' : '▾ Modül bazlı dökümü gör'}
               </Txt>
             )}
@@ -508,7 +496,9 @@ export function CashSummaryPanel({
             <View style={{ gap: spacing.sm }}>
               {rows.map(r => (
                 <View key={r.module} style={{
-                  backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm,
+                  backgroundColor: 'transparent',
+                  borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)',
+                  paddingTop: spacing.md, gap: spacing.sm,
                 }}>
                   {r.hasData ? (
                     <>
@@ -517,16 +507,16 @@ export function CashSummaryPanel({
                           width: 8, height: 8, borderRadius: 4,
                           backgroundColor: dark ? moduleAccent[r.module].dark : moduleAccent[r.module].light,
                         }} />
-                        <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{MODULE_LABEL[r.module]}</Txt>
+                        <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{MODULE_LABEL[r.module]}</Txt>
                       </View>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <BreakdownStat label="Beklenen" value={r.expected} color={c.textMuted} />
-                        <BreakdownStat label="Tahsil" value={r.collected} color={c.ok} />
-                        <BreakdownStat label="Kalan" value={r.balance} color={c.danger} />
+                        <BreakdownStat label="Beklenen" value={r.expected} color={glassColors.textSecondary} labelColor={glassColors.textSecondary} />
+                        <BreakdownStat label="Tahsil" value={r.collected} color={glassColors.accentLight} labelColor={glassColors.textSecondary} />
+                        <BreakdownStat label="Kalan" value={r.balance} color={glassColors.danger} labelColor={glassColors.textSecondary} />
                       </View>
                     </>
                   ) : (
-                    <Txt variant="small" color={c.textFaint}>
+                    <Txt variant="small" color={glassColors.textSecondary}>
                       {MODULE_LABEL[r.module]}: {money(0)} (Kayıt Yok)
                     </Txt>
                   )}
@@ -538,29 +528,15 @@ export function CashSummaryPanel({
           {!isProjection && (
             <View style={{ gap: spacing.xs }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Txt variant="tiny" color={c.textFaint}>Tahsilat oranı</Txt>
-                <Txt variant="tiny" color={c.textMuted}>%{rate}</Txt>
+                <Txt variant="tiny" color={glassColors.textSecondary}>Tahsilat oranı</Txt>
+                <Txt variant="tiny" color={glassColors.textPrimary}>%{rate}</Txt>
               </View>
-              <View style={{ height: 6, backgroundColor: c.surfaceAlt, borderRadius: radius.pill, overflow: 'hidden' }}>
-                <View style={{
-                  width: `${Math.min(100, Math.max(0, rate))}%`, height: '100%',
-                  backgroundColor: rate >= 80 ? c.ok : rate >= 40 ? c.accent : c.danger,
-                }} />
-              </View>
+              <GlassProgressBar value={rate} tier={rateTier} />
             </View>
           )}
 
           {!!onOpenRange && (
-            <Pressable
-              onPress={onOpenRange}
-              style={({ pressed }) => ({
-                alignItems: 'center', paddingVertical: spacing.sm,
-                borderRadius: radius.md, backgroundColor: pressed ? c.surfaceAlt : 'transparent',
-                borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
-              })}
-            >
-              <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>🗓 Tüm Yılı Göster</Txt>
-            </Pressable>
+            <GradientButton title="Tüm Yılı Göster" icon="📊" onPress={onOpenRange} />
           )}
         </>
       )}
@@ -616,9 +592,9 @@ function RangeSummaryModal({ visible, modules, onClose }: {
     <ModalShell visible={visible} onClose={onClose} maxHeightRatio={0.85}>
           <View style={{
             padding: spacing.lg, gap: spacing.md, flexShrink: 0,
-            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder,
           }}>
-            <Txt variant="h3">Tarih Aralığı Bilançosu</Txt>
+            <Txt variant="h3" color={glassColors.textPrimary}>Tarih Aralığı Bilançosu</Txt>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Txt variant="tiny" color={c.textFaint}>Başlangıç Ayı</Txt>
@@ -663,7 +639,7 @@ function RangeSummaryModal({ visible, modules, onClose }: {
                   );
 
                   return (
-                    <View key={m.module} style={{ gap: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: spacing.md }}>
+                    <View key={m.module} style={{ gap: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: glassColors.cardBorder, paddingTop: spacing.md }}>
                       <Pressable
                         onPress={() => setCollapsed(prev => ({ ...prev, [m.module]: !isCollapsed }))}
                         style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
@@ -707,7 +683,8 @@ function RangeSummaryModal({ visible, modules, onClose }: {
                         ) : m.data.map(p => (
                           <View key={p.period} style={{
                             gap: spacing.xs,
-                            backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md,
+                            backgroundColor: 'transparent',
+                            borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: spacing.md,
                           }}>
                             <Txt variant="small" color={c.textMuted} style={{ fontWeight: '700' }}>{periodLabel(p.period)}</Txt>
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
@@ -728,22 +705,26 @@ function RangeSummaryModal({ visible, modules, onClose }: {
   );
 }
 
-function BigStat({ label, value, color, full }: { label: string; value: number; color: string; full?: boolean }) {
+function BigStat({ label, value, color, labelColor, full }: {
+  label: string; value: number; color: string; labelColor?: string; full?: boolean;
+}) {
   const { c } = useTheme();
   return (
     <View style={{ gap: 2, flex: full ? undefined : 1 }}>
-      <Txt variant="small" color={c.textFaint}>{label}</Txt>
-      <Txt variant={full ? 'moneyLg' : 'moneyMd'} color={color} numberOfLines={1}>{money(value)}</Txt>
+      <Txt variant="small" color={labelColor ?? c.textFaint}>{label}</Txt>
+      <Txt variant={full ? 'moneyLg' : 'moneyMd'} color={color} numberOfLines={1} style={glassTextShadow}>{money(value)}</Txt>
     </View>
   );
 }
 
-function BreakdownStat({ label, value, color }: { label: string; value: number; color: string }) {
+function BreakdownStat({ label, value, color, labelColor }: {
+  label: string; value: number; color: string; labelColor?: string;
+}) {
   const { c } = useTheme();
   return (
     <View style={{ gap: 1 }}>
-      <Txt variant="tiny" color={c.textFaint}>{label}</Txt>
-      <Txt variant="moneySm" color={color}>{money(value)}</Txt>
+      <Txt variant="tiny" color={labelColor ?? c.textFaint}>{label}</Txt>
+      <Txt variant="moneySm" color={color} style={glassTextShadow}>{money(value)}</Txt>
     </View>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useTheme } from '@/lib/theme';
+import { glassColors, useTheme } from '@/lib/theme';
 import { useCreateSite } from '@/lib/api';
 import { currentPeriod, parseAmount, periodLabel } from '@/lib/format';
 import { MODULE_LABEL, type ModuleType } from '@/lib/types';
@@ -78,7 +78,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
     <ModalShell visible={visible} onClose={handleClose} keyboardAvoiding maxHeightRatio={0.88}>
             <View style={{
               padding: spacing.lg, gap: 2, flexShrink: 0,
-              borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+              borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder,
             }}>
               <Txt variant="h3">Yeni Site / Apartman Ekle</Txt>
               <Txt variant="small" color={c.textMuted}>{MODULE_LABEL[module]} listesine eklenecek</Txt>
@@ -100,8 +100,9 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
               />
 
               <View style={{
-                backgroundColor: c.surfaceAlt, borderRadius: radius.md,
-                paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 2,
+                backgroundColor: 'transparent',
+                borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)',
+                paddingTop: spacing.md, gap: 2,
               }}>
                 <Txt variant="small" color={c.textMuted} style={{ fontWeight: '600' }}>Modül Tipi</Txt>
                 <Txt variant="body" color={c.text}>{MODULE_LABEL[module]}</Txt>
@@ -143,7 +144,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
 
             <View style={{
               flexDirection: 'row', gap: spacing.md, padding: spacing.lg, flexShrink: 0,
-              borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
+              borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: glassColors.cardBorder,
             }}>
               <Button title="Vazgeç" variant="secondary" onPress={handleClose}
                       disabled={mutation.isPending} style={{ flex: 1 }} />

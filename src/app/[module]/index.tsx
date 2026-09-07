@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, View } from 'react-native';
+import { FlatList, Platform, Pressable, RefreshControl, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import {
   useLedger, usePeriodSummary, useProjectedSites, useProjectedSummary,
   type ProjectedSite,
 } from '@/lib/api';
-import { ModuleThemeProvider, useTheme } from '@/lib/theme';
+import { ModuleThemeProvider, glassColors, useTheme } from '@/lib/theme';
 import { currentPeriod, isFuturePeriod, periodFileLabel, periodLabel } from '@/lib/format';
 import { exportLedgerCsv } from '@/lib/export';
 import {
@@ -19,6 +20,7 @@ import { FilterDropdown, PeriodSwitcher, SearchBar } from '@/components/pickers'
 import { QuickEntryModal, SiteStatementModal } from '@/components/QuickEntryModal';
 import { AddSiteModal } from '@/components/AddSiteModal';
 import { EditSiteModal } from '@/components/EditSiteModal';
+import { GlassBackground } from '@/components/Glass';
 
 type ListItem = LedgerRow | ProjectedSite;
 
@@ -26,6 +28,8 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
   const { modules, profile } = useAuth();
   const { c, spacing, radius } = useTheme();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const headerOffset = insets.top + (Platform.select({ ios: 44, android: 56, default: 64 }) as number);
   const canManageSites = profile?.role === 'admin' || profile?.role === 'operator';
 
   const [period, setPeriod] = useState(currentPeriod());
@@ -76,8 +80,6 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
   useEffect(() => {
     navigation.setOptions({
       title: MODULE_LABEL[module] ?? 'Aylık Takip',
-      headerStyle: { backgroundColor: c.headerBg },
-      headerTintColor: c.headerText,
       headerRight: () => (
         <Pressable
           onPress={() => setExportConfirmOpen(true)}
@@ -85,20 +87,21 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
           hitSlop={8}
           style={({ pressed }) => ({
             flexDirection: 'row', alignItems: 'center', gap: 4,
-            backgroundColor: c.accentSoft,
+            backgroundColor: glassColors.cardBg,
+            borderWidth: 1, borderColor: glassColors.cardBorder,
             borderRadius: radius.pill,
             paddingVertical: 6, paddingHorizontal: 12,
             opacity: !hasRows ? 0.4 : pressed ? 0.7 : 1,
           })}
         >
-          <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>
+          <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>
             {exporting ? '…' : '⬇︎ Dışa Aktar'}
           </Txt>
         </Pressable>
       ),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, module, exporting, hasRows, c.accent, c.accentSoft, c.headerBg, c.headerText, radius.pill]);
+  }, [navigation, module, exporting, hasRows, radius.pill]);
 
   const rows = useMemo(() => {
     const data = ledger.data ?? [];
@@ -194,11 +197,11 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <GlassBackground safeArea={false}>
       <FlatList<ListItem>
         data={listData}
         keyExtractor={item => 'ledger_id' in item ? item.ledger_id : item.site_id}
-        contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md }}
+        contentContainerStyle={{ padding: spacing.lg, paddingTop: headerOffset + spacing.xl, paddingBottom: spacing.xxl, gap: spacing.md }}
         refreshControl={
           <RefreshControl
             refreshing={ledger.isRefetching}
@@ -356,7 +359,7 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
         variant={toast.variant}
         onHide={() => setToast(t => ({ ...t, visible: false }))}
       />
-    </View>
+    </GlassBackground>
   );
 }
 

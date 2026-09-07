@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth';
-import { useTheme } from '@/lib/theme';
-import { Button, Card, Field, Txt } from '@/components/ui';
+import { glassColors, useTheme } from '@/lib/theme';
+import { Field, Txt } from '@/components/ui';
+import { GlassBackground, GlassCard, GradientButton } from '@/components/Glass';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
-  const { c, spacing } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { spacing } = useTheme();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,53 +30,55 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, backgroundColor: c.headerBg }}
-    >
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1, justifyContent: 'center',
-          padding: spacing.xl, paddingTop: insets.top + spacing.xxl, gap: spacing.xxl,
-        }}
-        keyboardShouldPersistTaps="handled"
+    <GlassBackground>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
       >
-        <View style={{ gap: spacing.xs, alignItems: 'center' }}>
-          <Txt variant="h1" color={c.headerText}>Elevator360</Txt>
-          <Txt variant="small" color={c.accent}>Bakım ve Tahsilat Takip Sistemi</Txt>
-        </View>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1, justifyContent: 'center',
+            padding: spacing.xl, gap: spacing.xxl,
+          }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={{ gap: spacing.xs, alignItems: 'center' }}>
+            <Txt variant="h1" color={glassColors.textPrimary}>Elevator360</Txt>
+            <Txt variant="small" color={glassColors.primaryLight}>Bakım ve Tahsilat Takip Sistemi</Txt>
+          </View>
 
-        <Card style={{ gap: spacing.lg }}>
-          <Field
-            label="E-posta"
-            value={email}
-            onChangeText={t => { setEmail(t); setError(null); }}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            placeholder="ornek@firma.com"
-            editable={!busy}
-            maxLength={254}
-          />
-          <Field
-            label="Şifre"
-            value={password}
-            onChangeText={t => { setPassword(t); setError(null); }}
-            secureTextEntry
-            autoComplete="current-password"
-            placeholder="••••••••"
-            editable={!busy}
-            onSubmitEditing={submit}
-            returnKeyType="go"
-            error={error ?? undefined}
-          />
-          <Button title="Giriş yap" onPress={submit} loading={busy} />
-        </Card>
+          <GlassCard contentStyle={{ gap: spacing.lg }}>
+            <Field
+              label="E-posta"
+              value={email}
+              onChangeText={t => { setEmail(t); setError(null); }}
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              placeholder="ornek@firma.com"
+              editable={!busy}
+              maxLength={254}
+            />
+            <Field
+              label="Şifre"
+              value={password}
+              onChangeText={t => { setPassword(t); setError(null); }}
+              secureTextEntry
+              autoComplete="current-password"
+              placeholder="••••••••"
+              editable={!busy}
+              onSubmitEditing={submit}
+              returnKeyType="go"
+              error={error ?? undefined}
+            />
+            <GradientButton title="Giriş yap" onPress={submit} loading={busy} chevron={false} />
+          </GlassCard>
 
-        <Txt variant="tiny" color={c.textFaint} style={{ textAlign: 'center' }}>
-          Hesabınız yoksa sistem yöneticisiyle iletişime geçin.
-        </Txt>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <Txt variant="tiny" color={glassColors.textSecondary} style={{ textAlign: 'center' }}>
+            Hesabınız yoksa sistem yöneticisiyle iletişime geçin.
+          </Txt>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </GlassBackground>
   );
 }

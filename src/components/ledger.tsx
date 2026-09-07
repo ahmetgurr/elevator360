@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, UIManager, View } from 'react-native';
+import { PieChart } from 'react-native-gifted-charts';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { glassColors, glassTextShadow, moduleAccent, statusColors, useTheme } from '@/lib/theme';
 import { currentPeriod, dayLabel, isFuturePeriod, money, moneyShort, num, periodLabel } from '@/lib/format';
 import {
@@ -10,6 +12,13 @@ import { useRangeSummary, type ProjectedSite, type RangePeriodSummary } from '@/
 import { PeriodSwitcher } from './pickers';
 import { ModalShell, Txt } from './ui';
 import { GlassCard, GlassProgressBar, GradientButton } from './Glass';
+
+// Android'de LayoutAnimation varsayilan olarak kapali — "Genel Kasa Ozeti"
+// grafik/detay gecisinin (bkz. CashSummaryPanel) yukseklik degisimini
+// yumusakca animasyonlu yapabilmesi icin bir kez acilir.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 /* ------------------------------ Durum rozeti ---------------------------- */
 
@@ -407,6 +416,31 @@ export function CashSummaryPanel({
 }) {
   const { dark, spacing, radius } = useTheme();
   const [expanded, setExpanded] = useState(false);
+  const [viewMode, setViewMode] = useState<'chart' | 'details'>('chart');
+
+  function changeViewMode(mode: 'chart' | 'details') {
+    if (mode === viewMode) return;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setViewMode(mode);
+    dismissSliceTooltip();
+  }
+
+  // Dilime basinca merkez SABIT kalir; bilgi bunun yerine grafigin ustunde
+  // sabit konumlu, taşmayan bir bildirim kutusunda gosterilir (kutuphanenin
+  // touchX/Y tabanli tooltip'i dar kart genisliginde ekran disina tasiyordu).
+  const [activeSlice, setActiveSlice] = useState<'tahsil' | 'kalan' | null>(null);
+  const sliceTooltipTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showSliceTooltip(slice: 'tahsil' | 'kalan') {
+    if (sliceTooltipTimeout.current) clearTimeout(sliceTooltipTimeout.current);
+    setActiveSlice(slice);
+    sliceTooltipTimeout.current = setTimeout(() => setActiveSlice(null), 2200);
+  }
+
+  function dismissSliceTooltip() {
+    if (sliceTooltipTimeout.current) clearTimeout(sliceTooltipTimeout.current);
+    setActiveSlice(null);
+  }
 
   const hasAnyRealData = entries.some(e => !!e.summary);
   // Gelecek bir donemde bazi siteler icin simdiden gercek satir acilmis olsa
@@ -440,6 +474,13 @@ export function CashSummaryPanel({
 
   return (
     <View style={{ gap: spacing.lg }}>
+      {/* Dilim bildirimi acikken karta baska bir yere dokununca aninda
+          kapatir — sureyi beklemeye gerek yok (bkz. kullanici geri
+          bildirimi). Diger butonlarin/toggle'in ONUNDE degil ARKASINDA
+          durur, boylece onlarin kendi tiklama davranisini engellemez. */}
+      {activeSlice && (
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismissSliceTooltip} />
+      )}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
         <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1} style={{ flexShrink: 1, paddingTop: 4 }}>Genel Kasa Özeti</Txt>
         <PeriodSwitcher period={period} onChange={onPeriodChange} compact />
@@ -449,90 +490,188 @@ export function CashSummaryPanel({
         <Txt variant="small" color={glassColors.textSecondary}>Hesaplanıyor…</Txt>
       ) : showEmpty ? (
         <Txt variant="small" color={glassColors.textSecondary}>Bu dönem için henüz veri yok.</Txt>
+      ) : isProjection ? (
+        <>
+          <View style={{
+            backgroundColor: 'transparent',
+            borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: spacing.md,
+          }}>
+            <Txt variant="tiny" color={glassColors.textSecondary} style={{ fontWeight: '700' }}>
+              📅 ÖNGÖRÜLEN BİLANÇO — aktif sitelerin güncel ücretlerine göre tahmini; bu dönem henüz açılmadı.
+            </Txt>
+          </View>
+
+          <View style={{ gap: spacing.md }}>
+            <BigStat label="Toplam Beklenen" value={totals.expected} color={glassColors.textSecondary} labelColor={glassColors.textSecondary} full />
+            <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+              <BigStat label="Tahsil Edilen" value={totals.collected} color={glassColors.textSecondary} labelColor={glassColors.textSecondary} />
+              <BigStat label="Kalan Alacak" value={totals.balance} color={glassColors.textSecondary} labelColor={glassColors.textSecondary} />
+            </View>
+          </View>
+
+          {!!onOpenRange && (
+            <GradientButton title="Tüm Yılı Göster" icon="📊" onPress={onOpenRange} />
+          )}
+        </>
       ) : (
         <>
-          {isProjection && (
-            <View style={{
-              backgroundColor: 'transparent',
-              borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: spacing.md,
-            }}>
-              <Txt variant="tiny" color={glassColors.textSecondary} style={{ fontWeight: '700' }}>
-                📅 ÖNGÖRÜLEN BİLANÇO — aktif sitelerin güncel ücretlerine göre tahmini; bu dönem henüz açılmadı.
-              </Txt>
-            </View>
-          )}
+          {/* Grafik / Sayısal detay gecis anahtari — bkz. kullanici geri
+              bildirimi: Ziraat Bankası Borsa uygulamasi tarzi ikili toggle. */}
+          <View style={styles.viewToggle}>
+            <Pressable onPress={() => changeViewMode('chart')} style={[styles.viewToggleBtn, viewMode === 'chart' && styles.viewToggleBtnActive]}>
+              <Ionicons name="pie-chart" size={20} color={viewMode === 'chart' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
+            </Pressable>
+            <Pressable onPress={() => changeViewMode('details')} style={[styles.viewToggleBtn, viewMode === 'details' && styles.viewToggleBtnActive]}>
+              <Ionicons name="document-text" size={20} color={viewMode === 'details' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
+            </Pressable>
+          </View>
 
-          <Pressable
-            onPress={() => hasBreakdown && setExpanded(v => !v)}
-            disabled={!hasBreakdown}
-          >
-            <View style={{ gap: spacing.md }}>
-              <BigStat
-                label="Toplam Beklenen" value={totals.expected}
-                color={isProjection ? glassColors.textSecondary : glassColors.textPrimary}
-                labelColor={glassColors.textSecondary} full
-              />
-              <View style={{ flexDirection: 'row', gap: spacing.lg }}>
-                <BigStat
-                  label="Tahsil Edilen" value={totals.collected}
-                  color={isProjection ? glassColors.textSecondary : glassColors.accentLight}
-                  labelColor={glassColors.textSecondary}
-                />
-                <BigStat
-                  label="Kalan Alacak" value={totals.balance}
-                  color={isProjection ? glassColors.textSecondary : glassColors.danger}
-                  labelColor={glassColors.textSecondary}
-                />
-              </View>
-            </View>
-            {hasBreakdown && (
-              <Txt variant="tiny" color={glassColors.primaryLight} style={{ marginTop: spacing.sm, fontWeight: '700' }}>
-                {expanded ? '▴ Modül bazlı dökümü gizle' : '▾ Modül bazlı dökümü gör'}
-              </Txt>
-            )}
-          </Pressable>
-
-          {expanded && hasBreakdown && (
-            <View style={{ gap: spacing.sm }}>
-              {rows.map(r => (
-                <View key={r.module} style={{
-                  backgroundColor: 'transparent',
-                  borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)',
-                  paddingTop: spacing.md, gap: spacing.sm,
-                }}>
-                  {r.hasData ? (
-                    <>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                        <View style={{
-                          width: 8, height: 8, borderRadius: 4,
-                          backgroundColor: dark ? moduleAccent[r.module].dark : moduleAccent[r.module].light,
-                        }} />
-                        <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{MODULE_LABEL[r.module]}</Txt>
+          {viewMode === 'chart' ? (() => {
+            const collectedPct = totals.expected > 0 ? Math.round((totals.collected / totals.expected) * 100) : 0;
+            const balancePct = totals.expected > 0 ? 100 - collectedPct : 0;
+            return (
+              <View style={styles.chartRow}>
+                <View style={styles.chartWrap}>
+                  <PieChart
+                    data={
+                      totals.expected > 0
+                        ? [
+                            { value: totals.collected, color: '#059669', onPress: () => showSliceTooltip('tahsil') },
+                            { value: totals.balance, color: '#D32F2F', onPress: () => showSliceTooltip('kalan') },
+                          ]
+                        : [{ value: 1, color: glassColors.trackBg }]
+                    }
+                    donut
+                    radius={88}
+                    innerRadius={60}
+                    innerCircleColor="#12203A"
+                    strokeColor="#12203A"
+                    strokeWidth={3}
+                    curvedStartEdges
+                    curvedEndEdges
+                    edgesRadius={4}
+                    isAnimated
+                    animationDuration={500}
+                    // Basilan dilim hafifce disari tasarak hangi renge
+                    // basildigini nettir gosterir (bkz. kullanici geri
+                    // bildirimi: "hangi renge bastığımız anlaşılsın").
+                    focusOnPress
+                    extraRadius={8}
+                    centerLabelComponent={() => (
+                      <View style={styles.chartCenter}>
+                        <Txt variant="tiny" color={glassColors.textSecondary} numberOfLines={1}>Toplam Beklenen</Txt>
+                        <Txt
+                          color={glassColors.textPrimary} numberOfLines={1}
+                          style={[glassTextShadow, { fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] }]}
+                        >
+                          {money(totals.expected)}
+                        </Txt>
                       </View>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <BreakdownStat label="Beklenen" value={r.expected} color={glassColors.textSecondary} labelColor={glassColors.textSecondary} />
-                        <BreakdownStat label="Tahsil" value={r.collected} color={glassColors.accentLight} labelColor={glassColors.textSecondary} />
-                        <BreakdownStat label="Kalan" value={r.balance} color={glassColors.danger} labelColor={glassColors.textSecondary} />
+                    )}
+                  />
+                  {/* Dilime basinca merkez SABIT kalir ("Toplam Beklenen" hep
+                      ortada); bilgi bunun yerine grafigin ustunde, kart
+                      sinirlarini asmayan sabit konumlu bir bildirim
+                      kutusunda gosterilir (bkz. kullanici geri bildirimi). */}
+                  {activeSlice && (
+                    <View style={styles.sliceTooltip} pointerEvents="none">
+                      <View style={styles.sliceTooltipBox}>
+                        <View style={styles.sliceTooltipHeader}>
+                          <View style={[styles.legendDot, { backgroundColor: activeSlice === 'tahsil' ? '#059669' : '#D32F2F' }]} />
+                          <Txt variant="tiny" color={glassColors.textSecondary} numberOfLines={1}>
+                            {activeSlice === 'tahsil' ? `%${collectedPct} Tahsil Edilen` : `%${balancePct} Kalan Alacak`}
+                          </Txt>
+                        </View>
+                        <Txt
+                          color={glassColors.textPrimary} numberOfLines={1}
+                          style={{ fontWeight: '700', fontVariant: ['tabular-nums'] }}
+                        >
+                          {money(activeSlice === 'tahsil' ? totals.collected : totals.balance)}
+                        </Txt>
                       </View>
-                    </>
-                  ) : (
-                    <Txt variant="small" color={glassColors.textSecondary}>
-                      {MODULE_LABEL[r.module]}: {money(0)} (Kayıt Yok)
-                    </Txt>
+                    </View>
                   )}
                 </View>
-              ))}
-            </View>
-          )}
 
-          {!isProjection && (
-            <View style={{ gap: spacing.xs }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Txt variant="tiny" color={glassColors.textSecondary}>Tahsilat oranı</Txt>
-                <Txt variant="tiny" color={glassColors.textPrimary}>%{rate}</Txt>
+                <View style={styles.legendCol}>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#059669' }]} />
+                    <View style={{ flexShrink: 1 }}>
+                      <Txt variant="tiny" color={glassColors.textSecondary}>Tahsil Edilen</Txt>
+                      <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{money(totals.collected)}</Txt>
+                    </View>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#D32F2F' }]} />
+                    <View style={{ flexShrink: 1 }}>
+                      <Txt variant="tiny" color={glassColors.textSecondary}>Kalan Alacak</Txt>
+                      <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{money(totals.balance)}</Txt>
+                    </View>
+                  </View>
+                </View>
               </View>
-              <GlassProgressBar value={rate} tier={rateTier} />
-            </View>
+            );
+          })() : (
+            <>
+              <Pressable
+                onPress={() => hasBreakdown && setExpanded(v => !v)}
+                disabled={!hasBreakdown}
+              >
+                <View style={{ gap: spacing.md }}>
+                  <BigStat label="Toplam Beklenen" value={totals.expected} color={glassColors.textPrimary} labelColor={glassColors.textSecondary} full />
+                  <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+                    <BigStat label="Tahsil Edilen" value={totals.collected} color={glassColors.accentLight} labelColor={glassColors.textSecondary} />
+                    <BigStat label="Kalan Alacak" value={totals.balance} color={glassColors.danger} labelColor={glassColors.textSecondary} />
+                  </View>
+                </View>
+                {hasBreakdown && (
+                  <Txt variant="tiny" color={glassColors.primaryLight} style={{ marginTop: spacing.sm, fontWeight: '700' }}>
+                    {expanded ? '▴ Modül bazlı dökümü gizle' : '▾ Modül bazlı dökümü gör'}
+                  </Txt>
+                )}
+              </Pressable>
+
+              {expanded && hasBreakdown && (
+                <View style={{ gap: spacing.sm }}>
+                  {rows.map(r => (
+                    <View key={r.module} style={{
+                      backgroundColor: 'transparent',
+                      borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)',
+                      paddingTop: spacing.md, gap: spacing.sm,
+                    }}>
+                      {r.hasData ? (
+                        <>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                            <View style={{
+                              width: 8, height: 8, borderRadius: 4,
+                              backgroundColor: dark ? moduleAccent[r.module].dark : moduleAccent[r.module].light,
+                            }} />
+                            <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{MODULE_LABEL[r.module]}</Txt>
+                          </View>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <BreakdownStat label="Beklenen" value={r.expected} color={glassColors.textSecondary} labelColor={glassColors.textSecondary} />
+                            <BreakdownStat label="Tahsil" value={r.collected} color={glassColors.accentLight} labelColor={glassColors.textSecondary} />
+                            <BreakdownStat label="Kalan" value={r.balance} color={glassColors.danger} labelColor={glassColors.textSecondary} />
+                          </View>
+                        </>
+                      ) : (
+                        <Txt variant="small" color={glassColors.textSecondary}>
+                          {MODULE_LABEL[r.module]}: {money(0)} (Kayıt Yok)
+                        </Txt>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <View style={{ gap: spacing.xs }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Txt variant="tiny" color={glassColors.textSecondary}>Tahsilat oranı</Txt>
+                  <Txt variant="tiny" color={glassColors.textPrimary}>%{rate}</Txt>
+                </View>
+                <GlassProgressBar value={rate} tier={rateTier} />
+              </View>
+            </>
           )}
 
           {!!onOpenRange && (
@@ -704,6 +843,56 @@ function RangeSummaryModal({ visible, modules, onClose }: {
     </ModalShell>
   );
 }
+
+const styles = StyleSheet.create({
+  viewToggle: {
+    flexDirection: 'row', alignSelf: 'flex-start', gap: 2,
+    backgroundColor: 'rgba(5,10,25,0.45)', borderRadius: 999, padding: 3,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+  },
+  viewToggleBtn: {
+    paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999,
+    borderWidth: 1, borderColor: 'transparent',
+  },
+  viewToggleBtnActive: {
+    backgroundColor: 'rgba(37,99,235,0.35)', borderColor: 'rgba(96,165,250,0.5)',
+  },
+  // Grafik + legend'i yan yana yerlestiren satir — bkz. kullanici geri
+  // bildirimi: "legend grafigin altina degil, sagina tasinsin".
+  chartRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 16,
+  },
+  chartCenter: {
+    alignItems: 'center', justifyContent: 'center', maxWidth: 100,
+  },
+  // PieChart'in kendi kutusuyla ayni boyuta sarilir; dilim bildirimi bu
+  // sinirlar icinde ortalanarak asla karti/legend'i asıp gorunmez olmaz.
+  chartWrap: {
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sliceTooltip: {
+    position: 'absolute', top: 58, left: 0, right: 0,
+    alignItems: 'center',
+  },
+  sliceTooltipBox: {
+    maxWidth: 150, alignItems: 'center', gap: 2,
+    backgroundColor: 'rgba(11,21,38,0.96)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10,
+  },
+  sliceTooltipHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+  },
+  legendCol: {
+    flex: 1, gap: 14,
+  },
+  legendItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+  },
+  legendDot: {
+    width: 10, height: 10, borderRadius: 5,
+  },
+});
 
 function BigStat({ label, value, color, labelColor, full }: {
   label: string; value: number; color: string; labelColor?: string; full?: boolean;

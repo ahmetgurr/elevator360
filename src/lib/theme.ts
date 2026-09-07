@@ -16,13 +16,18 @@ const palette = {
   navy100: '#E7ECF4',
   navy050: '#F4F7FB',
 
-  // "Soft Gold" — eski gold400 (#DCBB55) fazla parlak/doygun duruyordu,
-  // "yapay zeka sarisi" gibi okunuyordu (bkz. kullanici geri bildirimi).
-  // Daha az doygun, sicak/bronz tonlu, premium bir varyanta cekildi.
-  gold600: '#8A6D3F',
-  gold500: '#A9865A',
-  gold400: '#C9A96E',
-  gold100: '#F0E6D2',
+  // Elevator modulunun kimlik rengi. Onceki "Soft Gold" (#C9A96E) hala
+  // sicak/sarimsi okunuyordu (bkz. kullanici geri bildirimi: uygulamada
+  // kalan TUM turuncu/sari tonlarin kaldirilmasi istendi) — Buzlu Mavi'ye
+  // cekildi; Temizlik modulunun Turkuaz'iyla birlikte iki net, "yapay zeka
+  // sarisi" icermeyen marka rengi cifti olusturur.
+  icyBlue600: '#2C5AA0',
+  icyBlue100: '#DCEAFD',
+
+  // "Eksik/Kismi" durumu icin: amber/turuncu yerine notr, soft bordo (bkz.
+  // kullanici geri bildirimi — "cok sirtamayan, estetik bir uyari rengi").
+  bordo600: '#7A3A41',
+  bordo100: '#F3E0E2',
 
   teal700: '#0D6B60',
   teal600: '#0F9488',
@@ -40,9 +45,6 @@ const palette = {
   red600: '#B91C1C',
   red500: '#DC2626',
   red100: '#FEE2E2',
-  amber600: '#B45309',
-  amber500: '#D97706',
-  amber100: '#FEF3C7',
   green600: '#15803D',
   green500: '#16A34A',
   green100: '#DCFCE7',
@@ -71,13 +73,13 @@ const light: Colors = {
   textMuted: palette.slate500,
   textFaint: palette.slate400,
   border: palette.slate200,
-  accent: palette.gold600,
-  accentSoft: palette.gold100,
-  onAccent: palette.navy900,
+  accent: palette.icyBlue600,
+  accentSoft: palette.icyBlue100,
+  onAccent: palette.white,
   danger: palette.red600,
   dangerSoft: palette.red100,
-  warn: palette.amber600,
-  warnSoft: palette.amber100,
+  warn: palette.bordo600,
+  warnSoft: palette.bordo100,
   ok: palette.green600,
   okSoft: palette.green100,
   info: palette.blue600,
@@ -94,16 +96,17 @@ const dark: Colors = {
   textMuted: palette.slate300,
   textFaint: palette.slate400,
   border: palette.navy600,
-  accent: palette.gold400,
-  accentSoft: 'rgba(169,134,90,0.18)',
-  onAccent: palette.navy900,
+  accent: '#60A5FA',
+  accentSoft: 'rgba(96,165,250,0.18)',
+  onAccent: palette.white,
   // Pastel mint/soluk kirmizi yerine tok, "finansal" kirmizi/yesil (bkz.
   // kullanici geri bildirimi — bankacilik uygulamalarindaki gibi canli
   // olsun istendi).
   danger: '#E53935',
   dangerSoft: 'rgba(229,57,53,0.22)',
-  warn: '#FBBF24',
-  warnSoft: 'rgba(217,119,6,0.22)',
+  // Amber/turuncu yerine notr soft bordo (bkz. kullanici geri bildirimi).
+  warn: '#C2707A',
+  warnSoft: 'rgba(194,112,122,0.22)',
   ok: '#00C853',
   okSoft: 'rgba(0,200,83,0.20)',
   info: '#60A5FA',
@@ -201,7 +204,9 @@ export const glassColors = {
   accent: '#00A344',
   accentLight: '#00C853',
   danger: '#E53935',
-  warning: '#F59E0B',
+  // Amber/turuncu yerine notr soft bordo (bkz. kullanici geri bildirimi:
+  // "Eksik" yazisinin turuncu rengi cok sirtiyordu).
+  warning: '#C2707A',
   textPrimary: '#F8FAFC',
   textSecondary: '#CBD5E1',
   cardBg: 'rgba(255,255,255,0.05)',

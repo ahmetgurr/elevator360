@@ -8,6 +8,7 @@ import { currentPeriod, num, parseAmount, periodLabel, shiftPeriod } from '@/lib
 import type { ModuleType } from '@/lib/types';
 import { PeriodSwitcher } from './pickers';
 import { Button, ConfirmModal, Field, Loading, ModalShell, Txt } from './ui';
+import { bounceScrollProps } from './Glass';
 
 /**
  * Site adi / aylik sabit ucret duzenleme + sozlesme feshi (pasife alma)
@@ -173,6 +174,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
                   style={{ flexShrink: 1 }}
                   contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
                   keyboardShouldPersistTaps="handled"
+                  {...bounceScrollProps}
                 >
                   {!site.data.is_active && (
                     <View style={{

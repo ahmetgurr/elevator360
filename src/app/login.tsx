@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { glassColors, useTheme } from '@/lib/theme';
 import { Field, Txt } from '@/components/ui';
-import { GlassBackground, GlassCard, GradientButton } from '@/components/Glass';
+import { GlassBackground, GlassCard, GradientButton, bounceScrollProps } from '@/components/Glass';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -41,6 +41,7 @@ export default function LoginScreen() {
             padding: spacing.xl, gap: spacing.xxl,
           }}
           keyboardShouldPersistTaps="handled"
+          {...bounceScrollProps}
         >
           <View style={{ gap: spacing.xs, alignItems: 'center' }}>
             <Txt variant="h1" color={glassColors.textPrimary}>Elevator360</Txt>

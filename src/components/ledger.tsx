@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, UIManager, View } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,7 +11,7 @@ import {
 import { useRangeSummary, type ProjectedSite, type RangePeriodSummary } from '@/lib/api';
 import { PeriodSwitcher } from './pickers';
 import { ModalShell, Txt } from './ui';
-import { GlassCard, GlassProgressBar, GradientButton } from './Glass';
+import { GlassCard, GlassProgressBar, GradientButton, androidRipple, pressScaleStyle, bounceScrollProps } from './Glass';
 
 // Android'de LayoutAnimation varsayilan olarak kapali — "Genel Kasa Ozeti"
 // grafik/detay gecisinin (bkz. CashSummaryPanel) yukseklik degisimini
@@ -58,7 +58,8 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
     return (
       <Pressable
         onPress={() => onPress(row)}
-        style={({ pressed }) => ({
+        android_ripple={androidRipple}
+        style={({ pressed }) => [{
           backgroundColor: pressed ? glassColors.rowBgPressed : glassColors.rowBg,
           borderRadius: radius.lg,
           borderWidth: 1,
@@ -67,7 +68,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
           padding: spacing.lg,
           gap: spacing.sm,
           opacity: 0.7,
-        })}
+        }, pressScaleStyle(pressed)]}
       >
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
           <View style={{ flex: 1, gap: 2 }}>
@@ -117,7 +118,8 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
   return (
     <Pressable
       onPress={() => onPress(row)}
-      style={({ pressed }) => ({
+      android_ripple={androidRipple}
+      style={({ pressed }) => [{
         backgroundColor: pressed ? glassColors.rowBgPressed : glassColors.rowBg,
         borderRadius: radius.lg,
         borderWidth: 1,
@@ -125,7 +127,7 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
         padding: spacing.lg,
         gap: spacing.sm,
         opacity: !isActive ? 0.6 : 1,
-      })}
+      }, pressScaleStyle(pressed)]}
     >
       {/* Ust satir: site adi + durum */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
@@ -284,6 +286,14 @@ export function ProjectedSiteListItem({ site, onPress }: {
 
 export function SummaryStrip({ summary }: { summary: PeriodSummary | null | undefined }) {
   const { spacing } = useTheme();
+  const [viewMode, setViewMode] = useState<'chart' | 'details'>('chart');
+
+  function changeViewMode(mode: 'chart' | 'details') {
+    if (mode === viewMode) return;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setViewMode(mode);
+  }
+
   if (!summary) return null;
 
   const rate = Math.round(num(summary.collection_rate_pct));
@@ -291,31 +301,64 @@ export function SummaryStrip({ summary }: { summary: PeriodSummary | null | unde
 
   return (
     <GlassCard contentStyle={{ gap: spacing.md }}>
-      {/* Mobilde tek satira sigmaya calisip kesilmesin diye: Beklenen
-          ustte tek basina genis, Tahsil/Kalan altta yan yana (bkz.
-          saha geri bildirimi). */}
-      <View style={{ gap: spacing.sm }}>
-        <Stat label="Beklenen" value={moneyShort(summary.total_expected)} color={glassColors.textPrimary} full />
-        <View style={{ flexDirection: 'row', gap: spacing.lg }}>
-          <Stat label="Tahsil" value={moneyShort(summary.total_collected)} color={glassColors.accentLight} />
-          <Stat label="Kalan"  value={moneyShort(summary.total_balance)}  color={glassColors.danger} />
+      {/* Modul detay ekranindaki Bilanço karti — Dashboard'daki "Genel Kasa
+          Özeti" (CashSummaryPanel) ile BIREBIR ayni toggle + halka grafik
+          mimarisi (bkz. kullanici geri bildirimi). Toggle'in sagindaki bosluk
+          "boş kaldı" gorundugu icin (bkz. kullanici geri bildirimi) yanina
+          kart basligi eklendi. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+        <View style={styles.viewToggle}>
+          <Pressable
+            onPress={() => changeViewMode('chart')}
+            android_ripple={androidRipple}
+            style={({ pressed }) => [styles.viewToggleBtn, viewMode === 'chart' && styles.viewToggleBtnActive, pressScaleStyle(pressed)]}
+          >
+            <Ionicons name="pie-chart" size={20} color={viewMode === 'chart' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
+          </Pressable>
+          <Pressable
+            onPress={() => changeViewMode('details')}
+            android_ripple={androidRipple}
+            style={({ pressed }) => [styles.viewToggleBtn, viewMode === 'details' && styles.viewToggleBtnActive, pressScaleStyle(pressed)]}
+          >
+            <Ionicons name="document-text" size={20} color={viewMode === 'details' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
+          </Pressable>
         </View>
+        <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1}>Bilanço Özeti</Txt>
       </View>
 
-      {/* Tahsilat orani */}
-      <View style={{ gap: spacing.xs }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Txt variant="tiny" color={glassColors.textSecondary}>Tahsilat oranı</Txt>
-          <Txt variant="tiny" color={glassColors.textPrimary}>%{rate}</Txt>
-        </View>
-        <GlassProgressBar value={rate} tier={rateTier} />
-      </View>
+      {viewMode === 'chart' ? (
+        <BalanceDonutChart expected={num(summary.total_expected)} collected={num(summary.total_collected)} balance={num(summary.total_balance)} />
+      ) : (
+        <>
+          {/* Mobilde tek satira sigmaya calisip kesilmesin diye: Beklenen
+              ustte tek basina genis, Tahsil/Kalan altta yan yana (bkz.
+              saha geri bildirimi). */}
+          <View style={{ gap: spacing.sm }}>
+            <Stat label="Beklenen" value={moneyShort(summary.total_expected)} color={glassColors.textPrimary} full />
+            <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+              <Stat label="Tahsil" value={moneyShort(summary.total_collected)} color={glassColors.accentLight} />
+              <Stat label="Kalan"  value={moneyShort(summary.total_balance)}  color={glassColors.danger} />
+            </View>
+          </View>
+
+          {/* Tahsilat orani */}
+          <View style={{ gap: spacing.xs }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Txt variant="tiny" color={glassColors.textSecondary}>Tahsilat oranı</Txt>
+              <Txt variant="tiny" color={glassColors.textPrimary}>%{rate}</Txt>
+            </View>
+            <GlassProgressBar value={rate} tier={rateTier} />
+          </View>
+        </>
+      )}
 
       {/* Bu 4 sayi (tamamlandı+eksik+bekliyor+gecikmiş) HER ZAMAN site
           sayisina esittir — bkz. 0011 migration (birbiriyle kesisen
-          kategoriler yuzunden eskiden toplam tutmuyordu). Dar ekranlarda
-          yan yana sigmadigi icin (bkz. kullanici geri bildirimi) yatay
-          kaydirilabilir bir seride gosterilir. */}
+          kategoriler yuzunden eskiden toplam tutmuyordu). Grafik/detay
+          gorunumunden BAGIMSIZ, HER ZAMAN gosterilir (bkz. kullanici geri
+          bildirimi — grafik moduna gecince bu satir kayboluyordu). Dar
+          ekranlarda yan yana sigmadigi icin yatay kaydirilabilir bir
+          seride gosterilir. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -400,6 +443,138 @@ interface DisplayRow {
  * ensure_current_period tarafindan acilmamis), projectedEntries
  * verilmisse "Öngörülen Bilanço" moduna geçilir — bkz. useProjectedSummary.
  */
+
+/**
+ * Beklenen/Tahsil/Kalan icin halka grafik + sag tarafta legend (bkz.
+ * kullanici geri bildirimi — Ziraat Bankasi tarzi toggle). Hem Dashboard'daki
+ * "Genel Kasa Özeti" (CashSummaryPanel) hem de modul detay ekranindaki
+ * "Bilanço" karti (SummaryStrip) BIREBIR AYNI bu bileseni kullanir.
+ *
+ * Merkez HER ZAMAN "Toplam Beklenen" gosterir, dilime basinca DEGISMEZ
+ * (bkz. kullanici geri bildirimi: merkezde degisen metin "anlasilmiyor",
+ * sabit kalmali). Basilan dilimin bilgisi bunun yerine grafigin ustunde
+ * ayri, birkac saniye sonra otomatik kaybolan bir bildirim kutusunda
+ * gosterilir. Onceki tikta acilan zamanlayici ust uste tiklamalarda
+ * cakismasin diye HER zaman once temizlenir (clearTimeout) — bkz.
+ * kullanici geri bildirimi: ilk tiklamada anlik "sifirlanip geri dusme"
+ * sorunu, PieChart'a HER render'da YENI bir `data` dizisi referansi
+ * verilmesinden kaynaklaniyordu (kutuphane, `data` referansi degisince
+ * odaklanan dilimi otomatik -1'e resetliyor — bkz. gifted-charts-core
+ * usePieChart). `useMemo` ile `data` referansi SADECE gercek tutarlar
+ * degisince yenilenir.
+ */
+function BalanceDonutChart({ expected, collected, balance }: {
+  expected: number; collected: number; balance: number;
+}) {
+  const [activeSlice, setActiveSlice] = useState<'tahsil' | 'kalan' | null>(null);
+  const revertTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (revertTimeout.current) clearTimeout(revertTimeout.current);
+  }, []);
+
+  function showSlice(slice: 'tahsil' | 'kalan') {
+    if (revertTimeout.current) clearTimeout(revertTimeout.current);
+    setActiveSlice(slice); // aninda guncellenir
+    revertTimeout.current = setTimeout(() => {
+      setActiveSlice(null);
+      revertTimeout.current = null;
+    }, 3500);
+  }
+
+  const collectedPct = expected > 0 ? Math.round((collected / expected) * 100) : 0;
+  const balancePct = expected > 0 ? 100 - collectedPct : 0;
+
+  const pieData = useMemo(
+    () =>
+      expected > 0
+        ? [
+            { value: collected, color: '#059669', onPress: () => showSlice('tahsil') },
+            { value: balance, color: '#D32F2F', onPress: () => showSlice('kalan') },
+          ]
+        : [{ value: 1, color: glassColors.trackBg }],
+    [expected, collected, balance],
+  );
+
+  return (
+    <View style={styles.chartRow}>
+      <View style={styles.chartWrap}>
+        <PieChart
+          data={pieData}
+          donut
+          radius={88}
+          innerRadius={60}
+          innerCircleColor="#12203A"
+          strokeColor="#12203A"
+          strokeWidth={3}
+          curvedStartEdges
+          curvedEndEdges
+          edgesRadius={4}
+          isAnimated
+          animationDuration={500}
+          // NOT: `focusOnPress`/`extraRadius` (dilimi disari tasirma efekti)
+          // BILEREK KULLANILMIYOR — o odaklanma durumu kutuphane tarafindan
+          // internal yonetiliyor ve bizim kendi setTimeout'umuzla senkron
+          // sifirlanmiyordu; bildirim kutusu 3.5sn sonra kayboluyor ama
+          // dilim "sisik" kaliyordu (bkz. kullanici geri bildirimi: "grafik
+          // inmiyor"). Hangi renge basildigi zaten bildirim kutusundaki
+          // renkli nokta ile belli oluyor.
+          // Merkez HER ZAMAN "Toplam Beklenen" gosterir, dilime basinca
+          // DEGISMEZ (bkz. kullanici geri bildirimi — merkezde degisen
+          // metin "anlasilmiyor", sabit kalmali). Basilan dilimin bilgisi
+          // bunun yerine grafigin ustunde ayri bir bildirim kutusunda
+          // gosterilir (asagida, chartWrap icinde konumlanir).
+          centerLabelComponent={() => (
+            <View style={styles.chartCenter}>
+              <Txt variant="tiny" color={glassColors.textSecondary} numberOfLines={1}>Toplam Beklenen</Txt>
+              <Txt
+                color={glassColors.textPrimary} numberOfLines={1}
+                style={[glassTextShadow, { fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] }]}
+              >
+                {money(expected)}
+              </Txt>
+            </View>
+          )}
+        />
+        {activeSlice && (
+          <View style={styles.sliceTooltip} pointerEvents="none">
+            <View style={styles.sliceTooltipBox}>
+              <View style={styles.sliceTooltipHeader}>
+                <View style={[styles.legendDot, { backgroundColor: activeSlice === 'tahsil' ? '#059669' : '#D32F2F' }]} />
+                <Txt variant="tiny" color={glassColors.textSecondary} numberOfLines={1}>
+                  {activeSlice === 'tahsil' ? `%${collectedPct} Tahsil Edilen` : `%${balancePct} Kalan Alacak`}
+                </Txt>
+              </View>
+              <Txt
+                color={glassColors.textPrimary} numberOfLines={1}
+                style={{ fontWeight: '700', fontVariant: ['tabular-nums'] }}
+              >
+                {money(activeSlice === 'tahsil' ? collected : balance)}
+              </Txt>
+            </View>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.legendCol}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: '#059669' }]} />
+          <View style={{ flexShrink: 1 }}>
+            <Txt variant="tiny" color={glassColors.textSecondary}>Tahsil Edilen</Txt>
+            <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{money(collected)}</Txt>
+          </View>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: '#D32F2F' }]} />
+          <View style={{ flexShrink: 1 }}>
+            <Txt variant="tiny" color={glassColors.textSecondary}>Kalan Alacak</Txt>
+            <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{money(balance)}</Txt>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
 export function CashSummaryPanel({
   entries, projectedEntries, loading, period, onPeriodChange,
   rangeOpen, onOpenRange, onCloseRange,
@@ -422,24 +597,6 @@ export function CashSummaryPanel({
     if (mode === viewMode) return;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setViewMode(mode);
-    dismissSliceTooltip();
-  }
-
-  // Dilime basinca merkez SABIT kalir; bilgi bunun yerine grafigin ustunde
-  // sabit konumlu, taşmayan bir bildirim kutusunda gosterilir (kutuphanenin
-  // touchX/Y tabanli tooltip'i dar kart genisliginde ekran disina tasiyordu).
-  const [activeSlice, setActiveSlice] = useState<'tahsil' | 'kalan' | null>(null);
-  const sliceTooltipTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function showSliceTooltip(slice: 'tahsil' | 'kalan') {
-    if (sliceTooltipTimeout.current) clearTimeout(sliceTooltipTimeout.current);
-    setActiveSlice(slice);
-    sliceTooltipTimeout.current = setTimeout(() => setActiveSlice(null), 2200);
-  }
-
-  function dismissSliceTooltip() {
-    if (sliceTooltipTimeout.current) clearTimeout(sliceTooltipTimeout.current);
-    setActiveSlice(null);
   }
 
   const hasAnyRealData = entries.some(e => !!e.summary);
@@ -474,13 +631,6 @@ export function CashSummaryPanel({
 
   return (
     <View style={{ gap: spacing.lg }}>
-      {/* Dilim bildirimi acikken karta baska bir yere dokununca aninda
-          kapatir — sureyi beklemeye gerek yok (bkz. kullanici geri
-          bildirimi). Diger butonlarin/toggle'in ONUNDE degil ARKASINDA
-          durur, boylece onlarin kendi tiklama davranisini engellemez. */}
-      {activeSlice && (
-        <Pressable style={StyleSheet.absoluteFill} onPress={dismissSliceTooltip} />
-      )}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
         <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1} style={{ flexShrink: 1, paddingTop: 4 }}>Genel Kasa Özeti</Txt>
         <PeriodSwitcher period={period} onChange={onPeriodChange} compact />
@@ -510,7 +660,7 @@ export function CashSummaryPanel({
           </View>
 
           {!!onOpenRange && (
-            <GradientButton title="Tüm Yılı Göster" icon="📊" onPress={onOpenRange} />
+            <GradientButton title="Tüm Yılı Göster" icon="📊" variant="outline" onPress={onOpenRange} />
           )}
         </>
       ) : (
@@ -518,104 +668,31 @@ export function CashSummaryPanel({
           {/* Grafik / Sayısal detay gecis anahtari — bkz. kullanici geri
               bildirimi: Ziraat Bankası Borsa uygulamasi tarzi ikili toggle. */}
           <View style={styles.viewToggle}>
-            <Pressable onPress={() => changeViewMode('chart')} style={[styles.viewToggleBtn, viewMode === 'chart' && styles.viewToggleBtnActive]}>
+            <Pressable
+              onPress={() => changeViewMode('chart')}
+              android_ripple={androidRipple}
+              style={({ pressed }) => [styles.viewToggleBtn, viewMode === 'chart' && styles.viewToggleBtnActive, pressScaleStyle(pressed)]}
+            >
               <Ionicons name="pie-chart" size={20} color={viewMode === 'chart' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
             </Pressable>
-            <Pressable onPress={() => changeViewMode('details')} style={[styles.viewToggleBtn, viewMode === 'details' && styles.viewToggleBtnActive]}>
+            <Pressable
+              onPress={() => changeViewMode('details')}
+              android_ripple={androidRipple}
+              style={({ pressed }) => [styles.viewToggleBtn, viewMode === 'details' && styles.viewToggleBtnActive, pressScaleStyle(pressed)]}
+            >
               <Ionicons name="document-text" size={20} color={viewMode === 'details' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
             </Pressable>
           </View>
 
-          {viewMode === 'chart' ? (() => {
-            const collectedPct = totals.expected > 0 ? Math.round((totals.collected / totals.expected) * 100) : 0;
-            const balancePct = totals.expected > 0 ? 100 - collectedPct : 0;
-            return (
-              <View style={styles.chartRow}>
-                <View style={styles.chartWrap}>
-                  <PieChart
-                    data={
-                      totals.expected > 0
-                        ? [
-                            { value: totals.collected, color: '#059669', onPress: () => showSliceTooltip('tahsil') },
-                            { value: totals.balance, color: '#D32F2F', onPress: () => showSliceTooltip('kalan') },
-                          ]
-                        : [{ value: 1, color: glassColors.trackBg }]
-                    }
-                    donut
-                    radius={88}
-                    innerRadius={60}
-                    innerCircleColor="#12203A"
-                    strokeColor="#12203A"
-                    strokeWidth={3}
-                    curvedStartEdges
-                    curvedEndEdges
-                    edgesRadius={4}
-                    isAnimated
-                    animationDuration={500}
-                    // Basilan dilim hafifce disari tasarak hangi renge
-                    // basildigini nettir gosterir (bkz. kullanici geri
-                    // bildirimi: "hangi renge bastığımız anlaşılsın").
-                    focusOnPress
-                    extraRadius={8}
-                    centerLabelComponent={() => (
-                      <View style={styles.chartCenter}>
-                        <Txt variant="tiny" color={glassColors.textSecondary} numberOfLines={1}>Toplam Beklenen</Txt>
-                        <Txt
-                          color={glassColors.textPrimary} numberOfLines={1}
-                          style={[glassTextShadow, { fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] }]}
-                        >
-                          {money(totals.expected)}
-                        </Txt>
-                      </View>
-                    )}
-                  />
-                  {/* Dilime basinca merkez SABIT kalir ("Toplam Beklenen" hep
-                      ortada); bilgi bunun yerine grafigin ustunde, kart
-                      sinirlarini asmayan sabit konumlu bir bildirim
-                      kutusunda gosterilir (bkz. kullanici geri bildirimi). */}
-                  {activeSlice && (
-                    <View style={styles.sliceTooltip} pointerEvents="none">
-                      <View style={styles.sliceTooltipBox}>
-                        <View style={styles.sliceTooltipHeader}>
-                          <View style={[styles.legendDot, { backgroundColor: activeSlice === 'tahsil' ? '#059669' : '#D32F2F' }]} />
-                          <Txt variant="tiny" color={glassColors.textSecondary} numberOfLines={1}>
-                            {activeSlice === 'tahsil' ? `%${collectedPct} Tahsil Edilen` : `%${balancePct} Kalan Alacak`}
-                          </Txt>
-                        </View>
-                        <Txt
-                          color={glassColors.textPrimary} numberOfLines={1}
-                          style={{ fontWeight: '700', fontVariant: ['tabular-nums'] }}
-                        >
-                          {money(activeSlice === 'tahsil' ? totals.collected : totals.balance)}
-                        </Txt>
-                      </View>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.legendCol}>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#059669' }]} />
-                    <View style={{ flexShrink: 1 }}>
-                      <Txt variant="tiny" color={glassColors.textSecondary}>Tahsil Edilen</Txt>
-                      <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{money(totals.collected)}</Txt>
-                    </View>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#D32F2F' }]} />
-                    <View style={{ flexShrink: 1 }}>
-                      <Txt variant="tiny" color={glassColors.textSecondary}>Kalan Alacak</Txt>
-                      <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{money(totals.balance)}</Txt>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            );
-          })() : (
+          {viewMode === 'chart' ? (
+            <BalanceDonutChart expected={totals.expected} collected={totals.collected} balance={totals.balance} />
+          ) : (
             <>
               <Pressable
                 onPress={() => hasBreakdown && setExpanded(v => !v)}
                 disabled={!hasBreakdown}
+                android_ripple={hasBreakdown ? androidRipple : undefined}
+                style={({ pressed }) => (hasBreakdown ? pressScaleStyle(pressed) : undefined)}
               >
                 <View style={{ gap: spacing.md }}>
                   <BigStat label="Toplam Beklenen" value={totals.expected} color={glassColors.textPrimary} labelColor={glassColors.textSecondary} full />
@@ -675,7 +752,7 @@ export function CashSummaryPanel({
           )}
 
           {!!onOpenRange && (
-            <GradientButton title="Tüm Yılı Göster" icon="📊" onPress={onOpenRange} />
+            <GradientButton title="Tüm Yılı Göster" icon="📊" variant="outline" onPress={onOpenRange} />
           )}
         </>
       )}
@@ -750,6 +827,7 @@ function RangeSummaryModal({ visible, modules, onClose }: {
             style={{ flexShrink: 1 }}
             contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
             keyboardShouldPersistTaps="handled"
+            {...bounceScrollProps}
           >
             {!rangeValid ? (
               <Txt variant="small" color={c.danger}>Başlangıç ayı, bitiş ayından sonra olamaz.</Txt>

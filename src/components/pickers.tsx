@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { glassColors, useTheme } from '@/lib/theme';
 import { periodLabel, shiftPeriod, currentPeriod } from '@/lib/format';
 import { Button, Txt } from './ui';
-import { GlassSurface, ModalBackdrop } from './Glass';
+import { GlassSurface, ModalBackdrop, androidRipple, pressScaleStyle, bounceScrollProps } from './Glass';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
                 'Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -66,26 +66,28 @@ export function FilterDropdown<T extends string>({
       {compact ? (
         <Pressable
           onPress={() => setOpen(true)}
-          style={({ pressed }) => ({
+          android_ripple={androidRipple}
+          style={({ pressed }) => [{
             alignItems: 'center', justifyContent: 'center',
             paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
             backgroundColor: glassColors.cardBg,
             borderWidth: 1, borderColor: glassColors.cardBorder,
             borderRadius: radius.md,
-            opacity: pressed ? 0.7 : 1,
-          })}
+            opacity: pressed && Platform.OS !== 'ios' ? 0.7 : 1,
+          }, pressScaleStyle(pressed)]}
         >
           <Txt variant="small" color={glassColors.textPrimary} numberOfLines={1} style={{ fontWeight: '700' }}>{compact.icon} {compact.label}</Txt>
         </Pressable>
       ) : (
         <Pressable
           onPress={() => setOpen(true)}
-          style={({ pressed }) => ({
+          android_ripple={androidRipple}
+          style={({ pressed }) => [{
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm,
-            backgroundColor: pressed ? glassColors.cardBgSoft : glassColors.cardBg,
+            backgroundColor: pressed && Platform.OS === 'ios' ? glassColors.cardBgSoft : glassColors.cardBg,
             borderWidth: 1, borderColor: glassColors.cardBorder,
             borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-          })}
+          }, pressScaleStyle(pressed)]}
         >
           <Txt variant="small" color={glassColors.textPrimary} style={{ flex: 1, fontWeight: '700' }} numberOfLines={1}>{current.label}</Txt>
           <Txt variant="tiny" color={glassColors.textSecondary} numberOfLines={1} style={{ flexShrink: 0 }}>
@@ -105,18 +107,19 @@ export function FilterDropdown<T extends string>({
               <View style={{ padding: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder }}>
                 <Txt variant="h3" color={glassColors.textPrimary}>{title}</Txt>
               </View>
-              <ScrollView style={{ maxHeight: 380 }}>
+              <ScrollView style={{ maxHeight: 380 }} {...bounceScrollProps}>
                 {options.map(opt => {
                   const active = opt.key === value;
                   return (
                     <Pressable
                       key={opt.key}
                       onPress={() => { onChange(opt.key); setOpen(false); }}
-                      style={({ pressed }) => ({
+                      android_ripple={androidRipple}
+                      style={({ pressed }) => [{
                         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                         paddingHorizontal: spacing.lg, paddingVertical: spacing.md + 2,
-                        backgroundColor: active ? c.accentSoft : pressed ? glassColors.cardBgSoft : 'transparent',
-                      })}
+                        backgroundColor: active ? c.accentSoft : pressed && Platform.OS === 'ios' ? glassColors.cardBgSoft : 'transparent',
+                      }, pressScaleStyle(pressed)]}
                     >
                       <Txt variant="body" color={active ? c.accent : glassColors.textPrimary}
                            style={{ fontWeight: active ? '700' : '400' }}>
@@ -158,7 +161,8 @@ export function PeriodSwitcher({ period, onChange, compact }: {
       <Arrow label="‹" compact onPress={() => onChange(shiftPeriod(period, -1))} />
       <Pressable
         onPress={() => setPickerOpen(true)}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: spacing.xs, paddingHorizontal: 2, flexShrink: 1 }}
+        android_ripple={androidRipple}
+        style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: spacing.xs, paddingHorizontal: 2, flexShrink: 1, borderRadius: radius.sm }, pressScaleStyle(pressed)]}
       >
         <Txt variant={compact ? 'tiny' : 'small'} color={glassColors.textPrimary} numberOfLines={1} style={{ fontWeight: '700' }}>
           {periodLabel(period)}
@@ -220,15 +224,16 @@ function MonthYearPickerModal({ visible, period, onClose, onSelect }: {
                     <Pressable
                       key={label}
                       onPress={() => onSelect(candidate)}
-                      style={({ pressed }) => ({
+                      android_ripple={androidRipple}
+                      style={({ pressed }) => [{
                         width: '30%',
                         paddingVertical: spacing.sm + 2,
                         borderRadius: radius.md,
                         alignItems: 'center',
-                        backgroundColor: active ? c.accent : pressed ? glassColors.cardBgSoft : glassColors.cardBg,
+                        backgroundColor: active ? c.accent : pressed && Platform.OS === 'ios' ? glassColors.cardBgSoft : glassColors.cardBg,
                         borderWidth: isNow && !active ? 1 : 0,
                         borderColor: c.accent,
-                      })}
+                      }, pressScaleStyle(pressed)]}
                     >
                       <Txt variant="small" color={active ? c.onAccent : glassColors.textPrimary}
                            style={{ fontWeight: active ? '700' : '400' }}>
@@ -254,11 +259,12 @@ function Arrow({ label, onPress, compact }: { label: string; onPress: () => void
     <Pressable
       onPress={onPress}
       hitSlop={8}
-      style={({ pressed }) => ({
+      android_ripple={{ ...androidRipple, borderless: true }}
+      style={({ pressed }) => [{
         paddingHorizontal: compact ? spacing.sm : spacing.lg,
         paddingVertical: compact ? spacing.xs : spacing.sm,
-        borderRadius: radius.sm, backgroundColor: pressed ? glassColors.cardBgSoft : 'transparent',
-      })}
+        borderRadius: radius.sm, backgroundColor: pressed && Platform.OS === 'ios' ? glassColors.cardBgSoft : 'transparent',
+      }, pressScaleStyle(pressed)]}
     >
       <Txt variant={compact ? 'h3' : 'h2'} color={c.accent}>{label}</Txt>
     </Pressable>

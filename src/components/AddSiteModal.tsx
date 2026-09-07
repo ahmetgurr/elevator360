@@ -6,6 +6,7 @@ import { currentPeriod, parseAmount, periodLabel } from '@/lib/format';
 import { MODULE_LABEL, type ModuleType } from '@/lib/types';
 import { PeriodSwitcher } from './pickers';
 import { Button, Field, ModalShell, Txt } from './ui';
+import { bounceScrollProps } from './Glass';
 
 /**
  * Yeni site/apartman ekleme formu. Modul tipi ekrandan miras alinir
@@ -88,6 +89,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
               style={{ flexShrink: 1 }}
               contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
               keyboardShouldPersistTaps="handled"
+              {...bounceScrollProps}
             >
               <Field
                 label="Sitenin / Apartmanın Adı"

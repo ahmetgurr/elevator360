@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { glassColors, useTheme } from '@/lib/theme';
 import { usePostTransaction, useSiteHistory, useUpdateNote } from '@/lib/api';
 import { currentPeriod, money, num, parseAmount, periodFileLabel, periodLabel } from '@/lib/format';
@@ -8,7 +8,7 @@ import { finalBalanceState, overpaidAmount, type LedgerRow, type ModuleType } fr
 import { StatusPill } from './ledger';
 import { EditSiteModal } from './EditSiteModal';
 import { Button, ConfirmModal, Field, ModalShell, Txt } from './ui';
-import { GlassSurface, ModalBackdrop } from './Glass';
+import { GlassSurface, ModalBackdrop, bounceScrollProps, androidRipple, pressScaleStyle } from './Glass';
 
 /** Cift dokunma kalkani: modal her acildiginda benzersiz bir istek kimligi uretilir */
 function makeRequestId(): string {
@@ -149,10 +149,11 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
               <Pressable
                 onPress={() => onOpenStatement(row.site_name, row, history.data ?? [])}
                 hitSlop={8}
-                style={({ pressed }) => ({
+                android_ripple={androidRipple}
+                style={({ pressed }) => [{
                   paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
-                  borderRadius: radius.sm, backgroundColor: pressed ? glassColors.cardBgSoft : 'transparent',
-                })}
+                  borderRadius: radius.sm, backgroundColor: pressed && Platform.OS === 'ios' ? glassColors.cardBgSoft : 'transparent',
+                }, pressScaleStyle(pressed)]}
               >
                 <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>📋 Tüm Ayları Görüntüle</Txt>
               </Pressable>
@@ -160,10 +161,11 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                 <Pressable
                   onPress={() => setEditSiteOpen(true)}
                   hitSlop={8}
-                  style={({ pressed }) => ({
+                  android_ripple={androidRipple}
+                  style={({ pressed }) => [{
                     paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
-                    borderRadius: radius.sm, backgroundColor: pressed ? glassColors.cardBgSoft : 'transparent',
-                  })}
+                    borderRadius: radius.sm, backgroundColor: pressed && Platform.OS === 'ios' ? glassColors.cardBgSoft : 'transparent',
+                  }, pressScaleStyle(pressed)]}
                 >
                   <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>✎ Düzenle</Txt>
                 </Pressable>
@@ -174,6 +176,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
               style={{ flexShrink: 1 }}
               contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
               keyboardShouldPersistTaps="handled"
+              {...bounceScrollProps}
             >
               {carryoverCleared && (
                 <View style={{ backgroundColor: c.okSoft, borderRadius: radius.md, padding: spacing.md, gap: 2 }}>
@@ -259,11 +262,12 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                   <Pressable
                     key={h.ledger_id}
                     onPress={() => onNavigateToPeriod(h.period, h)}
-                    style={({ pressed }) => ({
+                    android_ripple={androidRipple}
+                    style={({ pressed }) => [{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                       paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
-                      backgroundColor: pressed ? glassColors.cardBorder : glassColors.cardBgSoft, borderRadius: radius.sm,
-                    })}
+                      backgroundColor: pressed && Platform.OS === 'ios' ? glassColors.cardBorder : glassColors.cardBgSoft, borderRadius: radius.sm,
+                    }, pressScaleStyle(pressed)]}
                   >
                     <Txt variant="small" color={c.textMuted}>{periodLabel(h.period)}</Txt>
                     <StatusPill statusKey={h.status_key} label={h.status_label} small />
@@ -290,11 +294,12 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                     <Pressable
                       key={n.ledgerId}
                       onPress={() => setEditingNote(n)}
-                      style={({ pressed }) => ({
-                        backgroundColor: pressed ? glassColors.cardBorder : glassColors.cardBgSoft,
+                      android_ripple={androidRipple}
+                      style={({ pressed }) => [{
+                        backgroundColor: pressed && Platform.OS === 'ios' ? glassColors.cardBorder : glassColors.cardBgSoft,
                         borderRadius: radius.md, padding: spacing.md, gap: 2,
                         borderWidth: StyleSheet.hairlineWidth, borderColor: glassColors.cardBorder,
-                      })}
+                      }, pressScaleStyle(pressed)]}
                     >
                       <Txt variant="tiny" color={c.accent}>{periodLabel(n.period)}</Txt>
                       <Txt variant="small" color={c.text} numberOfLines={2}>{n.notes}</Txt>
@@ -398,12 +403,13 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
                 onPress={handleExport}
                 disabled={exporting || rows.length === 0}
                 hitSlop={8}
-                style={({ pressed }) => ({
+                android_ripple={androidRipple}
+                style={({ pressed }) => [{
                   flexDirection: 'row', alignItems: 'center', gap: 4,
                   backgroundColor: c.accentSoft, borderRadius: radius.pill,
                   paddingVertical: 6, paddingHorizontal: 12,
-                  opacity: rows.length === 0 ? 0.4 : pressed ? 0.7 : 1,
-                })}
+                  opacity: rows.length === 0 ? 0.4 : pressed && Platform.OS === 'ios' ? 0.7 : 1,
+                }, pressScaleStyle(pressed)]}
               >
                 <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>
                   {exporting ? '…' : '⬇︎ Dışa Aktar'}
@@ -428,7 +434,7 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
             </View>
           </View>
 
-          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}>
+          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }} {...bounceScrollProps}>
             {rows.map(r => {
               const balance = num(r.balance);
               const overpaid = overpaidAmount(balance);

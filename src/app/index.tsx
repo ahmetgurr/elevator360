@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { usePeriodSummary, useProjectedSummary } from '@/lib/api';
@@ -8,7 +8,7 @@ import { currentPeriod, formatGreetingName, isFuturePeriod, timeGreeting } from 
 import { MODULE_LABEL, type ModuleType } from '@/lib/types';
 import { Txt, confirmDestructive } from '@/components/ui';
 import { CashSummaryPanel } from '@/components/ledger';
-import { GlassBackground, GlassCard } from '@/components/Glass';
+import { GlassBackground, GlassCard, androidRipple, pressScaleStyle, bounceScrollProps } from '@/components/Glass';
 
 const MODULE_DESC: Record<ModuleType, string> = {
   elevator: 'Periyodik bakım, arıza, parça değişimi ve aylık tahsilat takibi',
@@ -65,7 +65,7 @@ export default function ModulePickerScreen() {
 
   return (
     <GlassBackground>
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }} {...bounceScrollProps}>
         <View style={styles.headerRow}>
           <View style={styles.headerBrand}>
             <View style={styles.logoBadge}>
@@ -73,17 +73,18 @@ export default function ModulePickerScreen() {
             </View>
             <Txt variant="h3" color={glassColors.textPrimary}>Elevator360</Txt>
           </View>
-          <Pressable onPress={handleSignOut} hitSlop={8} style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.7 : 1 }]}>
+          <Pressable
+            onPress={handleSignOut} hitSlop={8}
+            android_ripple={{ ...androidRipple, borderless: true }}
+            style={({ pressed }) => [styles.iconBtn, { opacity: pressed && Platform.OS !== 'ios' ? 0.7 : 1 }, pressScaleStyle(pressed)]}
+          >
             <Txt variant="h3" color={glassColors.textPrimary}>⎋</Txt>
           </Pressable>
         </View>
 
-        <View style={{ gap: spacing.xs }}>
-          <Txt variant="h1" color={glassColors.textPrimary}>
-            {timeGreeting()} {displayName || ''} 👋
-          </Txt>
-          <Txt variant="body" color={glassColors.textSecondary}>Bugün de her şey kontrol altında.</Txt>
-        </View>
+        <Txt variant="h1" color={glassColors.textPrimary}>
+          {timeGreeting()} {displayName || ''} 👋
+        </Txt>
 
         {modules.length === 0 ? (
           <GlassCard>
@@ -111,7 +112,11 @@ export default function ModulePickerScreen() {
 
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               {modules.map(m => (
-                <Pressable key={m} onPress={() => router.push(`/${m}`)} style={{ flex: 1 }}>
+                <Pressable
+                  key={m} onPress={() => router.push(`/${m}`)}
+                  android_ripple={androidRipple}
+                  style={({ pressed }) => [{ flex: 1, borderRadius: 24 }, pressScaleStyle(pressed)]}
+                >
                   <GlassCard style={{ flex: 1 }} contentStyle={{ gap: spacing.sm, minHeight: 168, justifyContent: 'space-between' }}>
                     <View style={[styles.moduleIconBadge, { backgroundColor: MODULE_ICON_BG[m] }]}>
                       <Txt style={styles.moduleIconGlyph}>{MODULE_ICON[m]}</Txt>

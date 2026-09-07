@@ -33,6 +33,38 @@ const wallpaperMobile = require('../../assets/images/elevator360_liquid_wallpape
 const BlurTargetContext = createContext<React.RefObject<View | null> | null>(null);
 
 /**
+ * Dokunma geri bildirimi (bkz. kullanici geri bildirimi: kartlara/butonlara
+ * basildiginda "hicbir hissiyat yok"). Android'de gercek su dalgasi
+ * (ripple) native olarak Pressable'a `android_ripple` ile verilir ve iOS'ta
+ * otomatik olarak yok sayilir — bu yuzden PLATFORM KONTROLU GEREKTIRMEZ,
+ * her Pressable'a kosulsuz eklenebilir. iOS'ta ise ripple olmadigi icin
+ * (Apple HIG'de de olmadigindan) hafif bir "basildi" hissi icin dokunma
+ * anida kucult (scale 0.98) animasyonu kullanilir — ANDROID'DE
+ * UYGULANMAZ, cunku ripple zaten yeterli geri bildirimi veriyor ve ikisi
+ * ust uste binince "titreme" gibi durur.
+ */
+export const androidRipple = { color: 'rgba(255,255,255,0.15)', borderless: false };
+
+export function pressScaleStyle(pressed: boolean): ViewStyle {
+  return Platform.OS === 'ios' && pressed ? { transform: [{ scale: 0.98 }] } : { transform: [{ scale: 1 }] };
+}
+
+/**
+ * iOS'un yaylanma/esneme (rubber-band bounce) hissini Android'e tasir (bkz.
+ * kullanici geri bildirimi). `bounces`/`alwaysBounceVertical` RN'de SADECE
+ * iOS'ta etkilidir (Android'de yok sayilir, zararsizdir); Android'in KENDI
+ * esdegeri `overScrollMode="always"` — Android 12+ (S) cihazlarda sistem
+ * bunu otomatik olarak native "stretch" efektiyle render eder, altindaki
+ * surumlerde klasik "glow" (isik halkasi) efektine duser — bu, platformun
+ * kendi sinirlarindan kaynaklanir, RN tarafindan taklit edilemez.
+ */
+export const bounceScrollProps = {
+  bounces: true,
+  alwaysBounceVertical: true,
+  overScrollMode: 'always' as const,
+};
+
+/**
  * Uygulamanin ortak arka plan mimarisi: manzara fotografi + koyulastirici
  * katman + mavi atmosfer katmani. _layout.tsx'te KOK seviyede bir kez, AYRICA
  * her ekranin kendi govdesinde tekrar monte edilir. Native'de (Expo Go) her
@@ -228,20 +260,48 @@ type GradientButtonProps = {
   onPress: () => void;
   icon?: string;
   chevron?: boolean;
-  variant?: 'primary' | 'positive';
+  variant?: 'primary' | 'positive' | 'outline';
   disabled?: boolean;
   loading?: boolean;
   style?: ViewStyle;
 };
 
-/** Gradyanli buton (~135deg). Primary/pozitif iki varyant. */
+/**
+ * Gradyanli buton (~135deg). Primary/pozitif/outline uc varyant. `outline`,
+ * expo-linear-gradient'in Android'de bazen duz/opak koyu bir blok gibi
+ * render etmesi yuzunden (bkz. kullanici geri bildirimi — "Tüm Yılı
+ * Göster" iOS'ta seffaf/sik, Android'de kocaman opak koyu mavi blok gibi
+ * duruyordu) gradyani TAMAMEN devre disi birakip iki platformda da AYNI,
+ * seffaf+ince kenarlikli "cam" gorunumu verir.
+ */
 export function GradientButton({ title, onPress, icon, chevron = true, variant = 'primary', disabled, loading, style }: GradientButtonProps) {
+  if (variant === 'outline') {
+    return (
+      <Pressable
+        onPress={onPress}
+        disabled={disabled || loading}
+        android_ripple={androidRipple}
+        style={({ pressed }) => [styles2.outline, pressScaleStyle(pressed), { opacity: disabled ? 0.5 : 1 }, style]}
+      >
+        {loading ? (
+          <ActivityIndicator color="#FFFFFF" />
+        ) : (
+          <>
+            {!!icon && <Text style={styles2.icon}>{icon}</Text>}
+            <Text style={styles2.label}>{title}</Text>
+            {chevron && <Text style={styles2.chevron}>›</Text>}
+          </>
+        )}
+      </Pressable>
+    );
+  }
   const colors = variant === 'positive' ? glassGradients.positive : glassGradients.primary;
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
-      style={({ pressed }) => [{ borderRadius: 14, overflow: 'hidden', opacity: disabled ? 0.5 : pressed ? 0.85 : 1 }, style]}
+      android_ripple={androidRipple}
+      style={({ pressed }) => [{ borderRadius: 14, overflow: 'hidden' }, pressScaleStyle(pressed), { opacity: disabled ? 0.5 : pressed ? 0.85 : 1 }, style]}
     >
       <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles2.gradient}>
         {loading ? (
@@ -262,6 +322,12 @@ const styles2 = StyleSheet.create({
   gradient: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 14, paddingHorizontal: 20,
+  },
+  outline: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 14, paddingHorizontal: 20, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
   },
   icon: { fontSize: 16 },
   label: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },

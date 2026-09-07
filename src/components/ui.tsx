@@ -4,7 +4,7 @@ import {
   TextInputProps, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { glassColors, useTheme } from '@/lib/theme';
-import { GlassCard, GlassSurface, ModalBackdrop } from './Glass';
+import { GlassCard, GlassSurface, ModalBackdrop, androidRipple, pressScaleStyle } from './Glass';
 
 /**
  * Yıkıcı/kritik işlemler (hesaptan çıkış, veri silme) için tek satırlık
@@ -76,6 +76,7 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading,
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
+      android_ripple={androidRipple}
       style={({ pressed }) => [{
         backgroundColor: bg,
         borderRadius: radius.md,
@@ -83,10 +84,10 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading,
         paddingHorizontal: spacing.lg,
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: disabled ? 0.45 : pressed ? 0.8 : 1,
+        opacity: disabled ? 0.45 : pressed && Platform.OS !== 'ios' ? 0.8 : 1,
         borderWidth: variant === 'ghost' || variant === 'secondary' ? 1 : 0,
         borderColor: glassColors.cardBorder,
-      }, style]}
+      }, pressScaleStyle(pressed), style]}
     >
       {loading
         ? <ActivityIndicator color={variant === 'primary' ? c.onAccent : c.accent} />

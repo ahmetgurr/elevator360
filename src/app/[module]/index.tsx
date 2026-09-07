@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { Animated, Platform, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
@@ -20,7 +20,7 @@ import { FilterDropdown, PeriodSwitcher, SearchBar } from '@/components/pickers'
 import { QuickEntryModal, SiteStatementModal } from '@/components/QuickEntryModal';
 import { AddSiteModal } from '@/components/AddSiteModal';
 import { EditSiteModal } from '@/components/EditSiteModal';
-import { GlassBackground } from '@/components/Glass';
+import { GlassBackground, bounceScrollProps, androidRipple, pressScaleStyle } from '@/components/Glass';
 
 type ListItem = LedgerRow | ProjectedSite;
 
@@ -191,7 +191,11 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
         ]}
       >
         <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} hitSlop={8} style={styles.headerIconBtn}>
+          <Pressable
+            onPress={() => router.back()} hitSlop={8}
+            android_ripple={{ ...androidRipple, borderless: true }}
+            style={({ pressed }) => [styles.headerIconBtn, pressScaleStyle(pressed)]}
+          >
             <Txt variant="h2" color={glassColors.textPrimary}>‹</Txt>
           </Pressable>
           <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1} style={{ flex: 1 }}>
@@ -202,14 +206,15 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
               onPress={() => setExportConfirmOpen(true)}
               disabled={exporting || !hasRows}
               hitSlop={8}
-              style={({ pressed }) => ({
+              android_ripple={androidRipple}
+              style={({ pressed }) => [{
                 flexDirection: 'row', alignItems: 'center', gap: 4,
                 backgroundColor: glassColors.cardBg,
                 borderWidth: 1, borderColor: glassColors.cardBorder,
                 borderRadius: radius.pill,
                 paddingVertical: 6, paddingHorizontal: 12,
-                opacity: !hasRows ? 0.4 : pressed ? 0.7 : 1,
-              })}
+                opacity: !hasRows ? 0.4 : pressed && Platform.OS === 'ios' ? 0.7 : 1,
+              }, pressScaleStyle(pressed)]}
             >
               <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>
                 {exporting ? '…' : '⬇︎ Dışa Aktar'}
@@ -237,6 +242,7 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
         contentContainerStyle={{ padding: spacing.lg, paddingTop: totalHeaderHeight + spacing.xl, paddingBottom: spacing.xxl, gap: spacing.md }}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        {...bounceScrollProps}
         refreshControl={
           <RefreshControl
             refreshing={ledger.isRefetching}
@@ -286,13 +292,14 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
               {canManageSites && (
                 <Pressable
                   onPress={() => setAddSiteOpen(true)}
-                  style={({ pressed }) => ({
+                  android_ripple={androidRipple}
+                  style={({ pressed }) => [{
                     alignItems: 'center', justifyContent: 'center',
                     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
                     backgroundColor: c.accentSoft,
                     borderRadius: radius.md,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
+                    opacity: pressed && Platform.OS === 'ios' ? 0.7 : 1,
+                  }, pressScaleStyle(pressed)]}
                 >
                   <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>+ Site Ekle</Txt>
                 </Pressable>

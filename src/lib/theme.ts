@@ -16,10 +16,13 @@ const palette = {
   navy100: '#E7ECF4',
   navy050: '#F4F7FB',
 
-  gold600: '#A8871F',
-  gold500: '#C9A227',
-  gold400: '#DCBB55',
-  gold100: '#F7EFD6',
+  // "Soft Gold" — eski gold400 (#DCBB55) fazla parlak/doygun duruyordu,
+  // "yapay zeka sarisi" gibi okunuyordu (bkz. kullanici geri bildirimi).
+  // Daha az doygun, sicak/bronz tonlu, premium bir varyanta cekildi.
+  gold600: '#8A6D3F',
+  gold500: '#A9865A',
+  gold400: '#C9A96E',
+  gold100: '#F0E6D2',
 
   teal700: '#0D6B60',
   teal600: '#0F9488',
@@ -92,14 +95,17 @@ const dark: Colors = {
   textFaint: palette.slate400,
   border: palette.navy600,
   accent: palette.gold400,
-  accentSoft: 'rgba(201,162,39,0.18)',
+  accentSoft: 'rgba(169,134,90,0.18)',
   onAccent: palette.navy900,
-  danger: '#F87171',
-  dangerSoft: 'rgba(220,38,38,0.22)',
+  // Pastel mint/soluk kirmizi yerine tok, "finansal" kirmizi/yesil (bkz.
+  // kullanici geri bildirimi — bankacilik uygulamalarindaki gibi canli
+  // olsun istendi).
+  danger: '#E53935',
+  dangerSoft: 'rgba(229,57,53,0.22)',
   warn: '#FBBF24',
   warnSoft: 'rgba(217,119,6,0.22)',
-  ok: '#4ADE80',
-  okSoft: 'rgba(22,163,74,0.22)',
+  ok: '#00C853',
+  okSoft: 'rgba(0,200,83,0.20)',
   info: '#60A5FA',
   infoSoft: 'rgba(29,78,216,0.25)',
 };
@@ -189,9 +195,12 @@ export function useTheme(module?: ModuleType) {
 export const glassColors = {
   primary: '#2563EB',
   primaryLight: '#60A5FA',
-  accent: '#22C55E',
-  accentLight: '#4ADE80',
-  danger: '#EF4444',
+  // Pastel mint yerine tok/canli finansal yesil-kirmizi (bkz. Colors.ok/danger
+  // yorumu) — Dashboard/Genel Kasa Ozeti gibi glassColors kullanan ekranlarda
+  // ayni kimlik icin birebir eslenir.
+  accent: '#00A344',
+  accentLight: '#00C853',
+  danger: '#E53935',
   warning: '#F59E0B',
   textPrimary: '#F8FAFC',
   textSecondary: '#CBD5E1',
@@ -200,6 +209,12 @@ export const glassColors = {
   cardBgSoft: 'rgba(255,255,255,0.07)',
   inputBg: 'rgba(255,255,255,0.12)',
   inputBorder: 'rgba(255,255,255,0.20)',
+  /** Modallarin KENDI govdesi icin: beyaz tonlu cardBg "gri/soluk" duruyordu
+   * (bkz. kullanici geri bildirimi). Lacivert kimlige (navy900) uyumlu, daha
+   * opak bir dolgu — modal zaten koyu+bulanik bir ModalBackdrop'un ustunde
+   * durdugu icin bu opakligi kaldirabilir, metin okunurlugu ARTAR. */
+  modalCardBg: 'rgba(11,21,38,0.82)',
+  modalCardBorder: 'rgba(255,255,255,0.14)',
   /** Blursuz ogeler icin (liste satirlari, dip kutular): keskin fotografin
    * uzerinde metin okunurlugu icin daha koyu, dogrudan (blursuz) saydamlik. */
   rowBg: 'rgba(5,15,30,0.55)',
@@ -211,7 +226,7 @@ export const glassColors = {
    * metniyle modalin kendi icerigi birbirine girmesin diye NEREDEYSE opak
    * (bkz. kullanici geri bildirimi: "arkadaki yazilarla modal ici yazilar
    * birbirine giriyor", iki modal ust uste acildiginda daha da kotu). */
-  modalScrim: 'rgba(5,10,25,0.95)',
+  modalScrim: 'rgba(5,10,25,0.97)',
 } as const;
 
 /** Buyuk rakamlarin (Toplam Beklenen, Kalan Alacak vb.) fotografli arka planda okunurlugunu artiran hafif metin golgesi. */
@@ -223,7 +238,7 @@ export const glassTextShadow = {
 
 export const glassGradients = {
   primary: ['#60A5FA', '#2563EB'] as const,
-  positive: ['#4ADE80', '#22C55E'] as const,
+  positive: ['#00E676', '#00A344'] as const,
 };
 
 /** Bilanco durumlarinin renk esleri (v_ledger.status_key ile birebir) */

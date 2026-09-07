@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, RefreshControl, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { Animated, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import {
   useLedger, usePeriodSummary, useProjectedSites, useProjectedSummary,
@@ -24,13 +24,36 @@ import { GlassBackground } from '@/components/Glass';
 
 type ListItem = LedgerRow | ProjectedSite;
 
+/** Ozel (native olmayan) header'in sabit icerik yuksekligi — bkz. collapsible header. */
+const HEADER_CONTENT_HEIGHT = 56;
+
 function LedgerListScreenInner({ module }: { module: ModuleType }) {
   const { modules, profile } = useAuth();
   const { c, spacing, radius } = useTheme();
-  const navigation = useNavigation();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
-  const headerOffset = insets.top + (Platform.select({ ios: 44, android: 56, default: 64 }) as number);
+  const totalHeaderHeight = insets.top + HEADER_CONTENT_HEIGHT;
   const canManageSites = profile?.role === 'admin' || profile?.role === 'operator';
+
+  /**
+   * Kaydirmali (collapsible) header: Animated.diffClamp, altta yatan
+   * scrollY'nin DELTASINI 0..totalHeaderHeight araliginda kirpar — asagi
+   * kaydirinca artar (header gizlenir), yukari kaydirinca AZALIR (header
+   * geri gelir), mutlak kaydirma konumundan BAGIMSIZ calisir (bkz.
+   * kullanici geri bildirimi: "asagi kaydiirinca gizlensin, yukari
+   * kaydirinca geri gelsin"). useNativeDriver:true ile transform bazli
+   * oldugu icin JS thread'i bloke etmez.
+   */
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const headerTranslateY = Animated.diffClamp(scrollY, 0, totalHeaderHeight).interpolate({
+    inputRange: [0, totalHeaderHeight],
+    outputRange: [0, -totalHeaderHeight],
+    extrapolate: 'clamp',
+  });
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: true },
+  );
 
   const [period, setPeriod] = useState(currentPeriod());
   const [filter, setFilter] = useState<QuickFilterKey>('all');
@@ -76,32 +99,6 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
     setPeriod(targetPeriod);
     setSelectedRow(targetRow);
   }
-
-  useEffect(() => {
-    navigation.setOptions({
-      title: MODULE_LABEL[module] ?? 'Aylık Takip',
-      headerRight: () => (
-        <Pressable
-          onPress={() => setExportConfirmOpen(true)}
-          disabled={exporting || !hasRows}
-          hitSlop={8}
-          style={({ pressed }) => ({
-            flexDirection: 'row', alignItems: 'center', gap: 4,
-            backgroundColor: glassColors.cardBg,
-            borderWidth: 1, borderColor: glassColors.cardBorder,
-            borderRadius: radius.pill,
-            paddingVertical: 6, paddingHorizontal: 12,
-            opacity: !hasRows ? 0.4 : pressed ? 0.7 : 1,
-          })}
-        >
-          <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>
-            {exporting ? '…' : '⬇︎ Dışa Aktar'}
-          </Txt>
-        </Pressable>
-      ),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, module, exporting, hasRows, radius.pill]);
 
   const rows = useMemo(() => {
     const data = ledger.data ?? [];
@@ -182,26 +179,64 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
   }, [rows, missingProjected, sortKey]);
 
   const listData: ListItem[] = [...activeBlend, ...passiveRows];
-
-  if (!module || (modules.length > 0 && !modules.includes(module))) {
-    return (
-      <EmptyState
-        title="Bu modüle erişiminiz yok"
-        detail="Yetkileriniz bu modülü kapsamıyor. Sistem yöneticisiyle görüşün."
-      />
-    );
-  }
-
-  if (ledger.isError) {
-    return <ErrorState message={(ledger.error as Error).message} onRetry={() => ledger.refetch()} />;
-  }
+  const accessDenied = !module || (modules.length > 0 && !modules.includes(module));
+  const hasError = ledger.isError;
 
   return (
     <GlassBackground safeArea={false}>
-      <FlatList<ListItem>
+      <Animated.View
+        style={[
+          styles.header,
+          { paddingTop: insets.top, height: totalHeaderHeight, transform: [{ translateY: headerTranslateY }] },
+        ]}
+      >
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => router.back()} hitSlop={8} style={styles.headerIconBtn}>
+            <Txt variant="h2" color={glassColors.textPrimary}>‹</Txt>
+          </Pressable>
+          <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1} style={{ flex: 1 }}>
+            {MODULE_LABEL[module] ?? 'Aylık Takip'}
+          </Txt>
+          {!accessDenied && !hasError && (
+            <Pressable
+              onPress={() => setExportConfirmOpen(true)}
+              disabled={exporting || !hasRows}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                flexDirection: 'row', alignItems: 'center', gap: 4,
+                backgroundColor: glassColors.cardBg,
+                borderWidth: 1, borderColor: glassColors.cardBorder,
+                borderRadius: radius.pill,
+                paddingVertical: 6, paddingHorizontal: 12,
+                opacity: !hasRows ? 0.4 : pressed ? 0.7 : 1,
+              })}
+            >
+              <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>
+                {exporting ? '…' : '⬇︎ Dışa Aktar'}
+              </Txt>
+            </Pressable>
+          )}
+        </View>
+      </Animated.View>
+
+      {accessDenied ? (
+        <View style={{ flex: 1, paddingTop: totalHeaderHeight }}>
+          <EmptyState
+            title="Bu modüle erişiminiz yok"
+            detail="Yetkileriniz bu modülü kapsamıyor. Sistem yöneticisiyle görüşün."
+          />
+        </View>
+      ) : hasError ? (
+        <View style={{ flex: 1, paddingTop: totalHeaderHeight }}>
+          <ErrorState message={(ledger.error as Error).message} onRetry={() => ledger.refetch()} />
+        </View>
+      ) : (
+      <Animated.FlatList<ListItem>
         data={listData}
         keyExtractor={item => 'ledger_id' in item ? item.ledger_id : item.site_id}
-        contentContainerStyle={{ padding: spacing.lg, paddingTop: headerOffset + spacing.xl, paddingBottom: spacing.xxl, gap: spacing.md }}
+        contentContainerStyle={{ padding: spacing.lg, paddingTop: totalHeaderHeight + spacing.xl, paddingBottom: spacing.xxl, gap: spacing.md }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={ledger.isRefetching}
@@ -296,6 +331,7 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
           ) : null
         }
       />
+      )}
 
       <QuickEntryModal
         row={selectedRow}
@@ -372,3 +408,17 @@ export default function LedgerListScreen() {
     </ModuleThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+    justifyContent: 'flex-end',
+  },
+  headerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, height: HEADER_CONTENT_HEIGHT,
+  },
+  headerIconBtn: {
+    width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+  },
+});

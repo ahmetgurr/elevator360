@@ -97,7 +97,7 @@ function ThemedShell() {
           >
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="[module]/index" options={{ title: 'Aylık Takip' }} />
+            <Stack.Screen name="[module]/index" options={{ headerShown: false }} />
           </Stack>
         </ThemeProvider>
       </AuthGate>

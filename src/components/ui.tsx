@@ -233,7 +233,7 @@ export function ModalShell({ visible, onClose, keyboardAvoiding, maxHeightRatio 
           <ModalBackdrop />
         </Pressable>
         <View pointerEvents="box-none" style={{ flex: 1, justifyContent: 'center', padding: spacing.xl }}>
-          <GlassSurface style={{ maxHeight: windowHeight * maxHeightRatio, flexShrink: 1 }}>
+          <GlassSurface intensity={30} tintColor={glassColors.modalCardBg} borderColor={glassColors.modalCardBorder} style={{ maxHeight: windowHeight * maxHeightRatio, flexShrink: 1 }}>
             {children}
           </GlassSurface>
         </View>
@@ -261,7 +261,7 @@ export function ConfirmModal({
       >
         <ModalBackdrop />
         <Pressable onPress={e => e.stopPropagation()}>
-          <GlassSurface style={{ padding: spacing.lg, gap: spacing.md }}>
+          <GlassSurface intensity={30} tintColor={glassColors.modalCardBg} borderColor={glassColors.modalCardBorder} style={{ padding: spacing.lg, gap: spacing.md }}>
             <Txt variant="h3" color={glassColors.textPrimary}>{title}</Txt>
             {!!message && <Txt variant="small" color={glassColors.textSecondary}>{message}</Txt>}
             <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>

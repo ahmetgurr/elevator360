@@ -432,15 +432,15 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
             {rows.map(r => {
               const balance = num(r.balance);
               const overpaid = overpaidAmount(balance);
+              const isCurrent = r.ledger_id === currentRow.ledger_id;
               return (
                 <View
                   key={r.ledger_id}
                   style={{
-                    backgroundColor: 'transparent',
+                    backgroundColor: isCurrent ? 'rgba(37,99,235,0.10)' : 'transparent',
                     borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)',
-                    paddingTop: spacing.md, gap: spacing.xs,
-                    borderWidth: r.ledger_id === currentRow.ledger_id ? 1 : 0,
-                    borderColor: c.accent,
+                    borderLeftWidth: isCurrent ? 3 : 0, borderLeftColor: glassColors.primaryLight,
+                    paddingTop: spacing.md, paddingLeft: isCurrent ? spacing.sm : 0, gap: spacing.xs,
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -528,7 +528,7 @@ function NoteEditModal({ note, siteId, updateNote, onClose, onSaved }: {
       >
         <ModalBackdrop />
         <Pressable onPress={e => e.stopPropagation()}>
-          <GlassSurface style={{ padding: spacing.lg, gap: spacing.md }}>
+          <GlassSurface intensity={30} tintColor={glassColors.modalCardBg} borderColor={glassColors.modalCardBorder} style={{ padding: spacing.lg, gap: spacing.md }}>
           <Txt variant="h3" color={glassColors.textPrimary}>{periodLabel(note.period)} Notu</Txt>
 
           {note.isLocked ? (

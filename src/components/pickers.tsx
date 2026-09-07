@@ -101,7 +101,7 @@ export function FilterDropdown<T extends string>({
         >
           <ModalBackdrop />
           <Pressable onPress={e => e.stopPropagation()}>
-            <GlassSurface>
+            <GlassSurface intensity={30} tintColor={glassColors.modalCardBg} borderColor={glassColors.modalCardBorder}>
               <View style={{ padding: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder }}>
                 <Txt variant="h3" color={glassColors.textPrimary}>{title}</Txt>
               </View>

@@ -103,23 +103,26 @@ const ANDROID_BLUR_METHOD: BlurMethod = 'dimezisBlurViewSdk31Plus';
  * kokten ortadan kaldirir. Web'de zaten CSS backdrop-filter oldugu icin bu
  * fark hic yoktu.
  */
-export function GlassSurface({ children, style, intensity = 20, fill, blurTarget, blurMethod }: {
+export function GlassSurface({ children, style, intensity = 20, fill, blurTarget, blurMethod, tintColor, borderColor }: {
   children: React.ReactNode; style?: ViewStyle; intensity?: number;
   /** GlassCard gibi flex:1 ile ustten yukseklik dayatilan baglamlarda kullanilir. */
   fill?: boolean;
   /** Android'de gercek blur icin — bkz. GlassBackground/BlurTargetContext. Modallarda BILEREK verilmez. */
   blurTarget?: React.RefObject<View | null>;
   blurMethod?: BlurMethod;
+  /** Varsayilan (beyaz tonlu, fotografli ekranlar icin) cardBg/cardBorder'i ezer — bkz. modalCardBg. */
+  tintColor?: string;
+  borderColor?: string;
 }) {
   return (
-    <View style={[styles.outerBorder, fill && styles.fill, style]}>
+    <View style={[styles.outerBorder, borderColor != null && { borderColor }, fill && styles.fill, style]}>
       <BlurView
         intensity={intensity}
         tint="dark"
         pointerEvents="none"
         blurTarget={blurTarget ?? undefined}
         blurMethod={blurMethod}
-        style={[StyleSheet.absoluteFill, styles.blurBg]}
+        style={[StyleSheet.absoluteFill, styles.blurBg, tintColor != null && { backgroundColor: tintColor }]}
       />
       {children}
     </View>
@@ -212,7 +215,7 @@ const styles = StyleSheet.create({
 export function ModalBackdrop() {
   return (
     <BlurView
-      intensity={50}
+      intensity={65}
       tint="dark"
       pointerEvents="none"
       style={[StyleSheet.absoluteFill, { backgroundColor: glassColors.modalScrim }]}

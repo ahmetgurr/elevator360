@@ -176,20 +176,22 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   const carryoverCleared = carriedOverAmount > 0 && overpaidThisMonth && netAfterCarryover <= 0.01;
   const carryoverStillOwed = carriedOverAmount > 0 && overpaidThisMonth && netAfterCarryover > 0.01;
   const extraCreditAfterClear = carryoverCleared && netAfterCarryover < -0.01 ? -netAfterCarryover : 0;
-  // "Bu Ay Kalan" MiniStat'i HER ZAMAN bu AYIN KENDI tutarlarina gore
-  // (Bu Ay Toplam - Bu Ay Odenen) okunur — gecmisten devreden borcun
-  // kapanip kapanmadigindan BAGIMSIZ. Eskiden gecmis borc kapandiginda
-  // (carryoverCleared) burada HAM negatif bakiye ("-16.850,00") yesil
-  // renkte gosteriliyordu — renk doğru ama yazı "Kalan" oldugu icin esnaf
-  // "hala borc mu var" diye kafasi karisiyordu (bkz. kullanici geri
-  // bildirimi). Bu ay fazla odeme varsa HER DURUMDA "Bu Ay Fazla Ödenen"
-  // + pozitif tutar gosterilir; gecmis borcla ilgili net durum zaten ayrı
-  // renkli kutularda (carryoverCleared/carryoverStillOwed, asagida)
-  // acikca anlatiliyor.
+  // MiniStat, ekrandaki KIRMIZI/YEŞİL uyarı kutularıyla ASLA çelişmemeli
+  // (bkz. kullanıcı geri bildirimi: "hem geçmiş borç var diyor hem fazla
+  // ödemiş diyor yeşil, mantıksız — hepsi aynı anda olmasın"):
+  //  - carryoverStillOwed (kırmızı kutu: "Fazla Ödemeye Rağmen Kalan Geçmiş
+  //    Borç") AKTİFKEN, MiniStat de AYNI kırmızı "Toplam Kalan" tutarını
+  //    gösterir — yeşil "Fazla Ödenen" ile ÇELİŞEN ikinci bir mesaj asla
+  //    aynı anda görünmez.
+  //  - carryoverCleared (yeşil kutu: "Geçmiş Borç Kapatıldı") aktifken bu
+  //    ay kendi fazla ödemesi yeşil gösterilir — o kutuyla ÇELİŞMEZ, aksine
+  //    tutarı acikliyor (16.850 fazla ödendi -> geçmiş borç kapandı + X devretti).
   const thisMonthOverpaidAmount = overpaidAmount(num(row.balance));
-  const thisMonthRemaining = thisMonthOverpaidAmount !== null
-    ? { label: 'Bu Ay Fazla Ödenen', value: String(thisMonthOverpaidAmount), color: c.ok }
-    : { label: 'Bu Ay Kalan', value: row.balance, color: num(row.balance) > 0 ? c.danger : c.ok };
+  const thisMonthRemaining = carryoverStillOwed
+    ? { label: 'Toplam Kalan', value: String(netAfterCarryover), color: c.danger }
+    : thisMonthOverpaidAmount !== null
+      ? { label: 'Bu Ay Fazla Ödenen', value: String(thisMonthOverpaidAmount), color: c.ok }
+      : { label: 'Bu Ay Kalan', value: row.balance, color: num(row.balance) > 0 ? c.danger : c.ok };
   const isPastPeriod = row.period < currentPeriod();
   const finalState = finalBalanceState(num(row.site_current_balance));
 
@@ -249,9 +251,13 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
               padding: spacing.lg, gap: spacing.sm, flexShrink: 0,
               borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder,
             }}>
+              {/* Esnaf icin en onemli bilgi HANGI SITE oldugu — kucuk "Hızlı Kayıt"
+                  etiketi ustte kalsin ama site adi buyuk/belirgin olsun (bkz.
+                  kullanici geri bildirimi: "üstte site isimleri çok küçük
+                  kalmış, belli olacak şekilde büyük yazılsın"). */}
               <View style={{ gap: 2 }}>
-                <Txt variant="h3">Hızlı Kayıt</Txt>
-                <Txt variant="small" color={c.textMuted} numberOfLines={2}>{row.site_name}</Txt>
+                <Txt variant="tiny" color={c.textFaint} style={{ letterSpacing: 0.5 }}>HIZLI KAYIT</Txt>
+                <Txt variant="h2" color={glassColors.textPrimary} numberOfLines={2}>{row.site_name}</Txt>
               </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
                 <HeaderPillButton
@@ -373,6 +379,10 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                       paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
                       backgroundColor: pressed && Platform.OS === 'ios' ? glassColors.cardBorder : glassColors.cardBgSoft, borderRadius: radius.sm,
+                      // Pasife alınan ay burada da soluk görünsün — bkz.
+                      // kullanıcı geri bildirimi ve SiteStatementModal'daki
+                      // aynı fade davranışı.
+                      opacity: h.is_skipped ? 0.55 : 1,
                     }, pressScaleStyle(pressed)]}
                   >
                     <Txt variant="small" color={c.textMuted}>{periodLabel(h.period)}</Txt>

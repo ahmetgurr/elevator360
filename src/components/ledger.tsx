@@ -95,13 +95,21 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
   // fazla odeme): ham negatif "Kalan" yerine pozitif "Fazla Ödenen"
   // etiketiyle gosterilir — bkz. kullanici geri bildirimi.
   const simpleOverpaid = !carryoverCleared && !carryoverStillOwed ? overpaidAmount(balance) : null;
+  // "Kalan"/"Fazla Ödenen" etiketleri "Bu Ay" onekiyle netlestirilir (bkz.
+  // kullanici geri bildirimi) — TEK ISTISNA: carryoverStillOwed durumunda
+  // gosterilen tutar artik BU AYIN KENDI degeri DEGIL, gecmisten devreden
+  // borc dahil NET toplamdir; "Bu Ay Kalan" demek YANLIS olurdu, bu yuzden
+  // "Toplam Kalan" kullanilir (bkz. kullanici geri bildirimi: kirmizi
+  // "gecmis borc var" ile yesil "fazla odemis" AYNI ANDA gorunmemeli —
+  // burada zaten TEK bir kirmizi "Toplam Kalan" mesaji var, celisen ikinci
+  // bir yesil mesaj YOK).
   const remainingAmount = carryoverCleared
-    ? { label: 'Kalan', value: '0', color: c.ok }
+    ? { label: 'Bu Ay Kalan', value: '0', color: c.ok }
     : carryoverStillOwed
-      ? { label: 'Kalan', value: String(netAfterCarryover), color: c.danger }
+      ? { label: 'Toplam Kalan', value: String(netAfterCarryover), color: c.danger }
       : simpleOverpaid !== null
-        ? { label: 'Fazla Ödenen', value: String(simpleOverpaid), color: c.ok }
-        : { label: 'Kalan', value: row.balance, color: balance > 0 ? c.danger : c.ok };
+        ? { label: 'Bu Ay Fazla Ödenen', value: String(simpleOverpaid), color: c.ok }
+        : { label: 'Bu Ay Kalan', value: row.balance, color: balance > 0 ? c.danger : c.ok };
   // Gecmis bir ay kartina bakilirken bile sitenin BUGUNKU nihai bakiyesi
   // net gorunsun — bkz. kullanici geri bildirimi (Bozyel 4 senaryosu):
   // Temmuz karti kendi basina borclu gorunse bile, site Agustos'ta toplu
@@ -137,10 +145,15 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
           : <StatusPill statusKey={row.status_key} label={row.status_label} small />}
       </View>
 
-      {/* Alt satir: tutarlar */}
+      {/* Alt satir: tutarlar — etiketler "Bu Ay" onekiyle netlestirilir (bkz.
+          kullanici geri bildirimi: "Kalan yerine Bu Ay Kalan yazsın, Ödenen
+          yerine Bu Ay Ödenen yazsın"). remainingAmount.label kendisi zaten
+          "Toplam Kalan" gibi kapsamı netleştiren bir etiket dönebiliyorsa
+          (carryoverStillOwed — bkz. asağıda) OLDUĞU GİBİ kullanılır; "Bu Ay"
+          öneki SADECE bu ayın kendi tutarını yansıtan durumlarda eklenir. */}
       <View style={{ flexDirection: 'row', gap: spacing.lg, marginTop: spacing.xs }}>
-        <Amount label="Toplam" value={row.total_due} color={c.textMuted} />
-        <Amount label="Ödenen" value={row.net_paid}
+        <Amount label="Bu Ay Toplam" value={row.total_due} color={c.textMuted} />
+        <Amount label="Bu Ay Ödenen" value={row.net_paid}
                 color={paid > 0 ? c.ok : c.textFaint} />
         <Amount label={remainingAmount.label} value={remainingAmount.value} color={remainingAmount.color} strong />
       </View>
@@ -860,29 +873,27 @@ function RangeSummaryModal({ visible, modules, onClose }: {
             padding: spacing.lg, gap: spacing.md, flexShrink: 0,
             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder,
           }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
-              <Txt variant="h3" color={glassColors.textPrimary} style={{ flexShrink: 1, paddingTop: 4 }}>Tarih Aralığı Bilançosu</Txt>
-              {/* Minimalist, soft dışa aktarma pili — kartın sağ üst köşesinde;
-                  önceki buyuk/ortali GradientButton yerine (bkz. kullanici geri
-                  bildirimi) diger ekranlardaki "⬇︎ Dışa Aktar" pilleriyle
-                  (SiteStatementModal/[module]/index.tsx) AYNI kompakt stil. */}
-              <Pressable
-                onPress={handleExportExcel}
-                disabled={excelExporting || !rangeValid || excelRows.length === 0}
-                hitSlop={8}
-                android_ripple={androidRipple}
-                style={({ pressed }) => [{
-                  flexDirection: 'row', alignItems: 'center', gap: 4,
-                  backgroundColor: c.accentSoft, borderRadius: radius.pill,
-                  paddingVertical: 6, paddingHorizontal: 12,
-                  opacity: (!rangeValid || excelRows.length === 0) ? 0.4 : pressed && Platform.OS === 'ios' ? 0.7 : 1,
-                }, pressScaleStyle(pressed)]}
-              >
-                <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>
-                  {excelExporting ? '…' : '📥 Excel’e Aktar'}
-                </Txt>
-              </Pressable>
-            </View>
+            {/* Baslik TEK BASINA kendi satirinda — uzun baslik ("Tarih Aralığı
+                Bilançosu") + pil buton AYNI satirda basinca/dar ekranlarda
+                garip sikisiyordu (bkz. kullanici geri bildirimi). Buton
+                simdi ayri, sag hizali bir satirda. */}
+            <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1}>Tarih Aralığı Bilançosu</Txt>
+            <Pressable
+              onPress={handleExportExcel}
+              disabled={excelExporting || !rangeValid || excelRows.length === 0}
+              hitSlop={8}
+              android_ripple={androidRipple}
+              style={({ pressed }) => [{
+                flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4,
+                backgroundColor: c.accentSoft, borderRadius: radius.pill,
+                paddingVertical: 6, paddingHorizontal: 12,
+                opacity: (!rangeValid || excelRows.length === 0) ? 0.4 : pressed && Platform.OS === 'ios' ? 0.7 : 1,
+              }, pressScaleStyle(pressed)]}
+            >
+              <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>
+                {excelExporting ? '…' : '📥 Excel'}
+              </Txt>
+            </Pressable>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Txt variant="tiny" color={c.textFaint}>Başlangıç Ayı</Txt>
@@ -946,23 +957,26 @@ function RangeSummaryModal({ visible, modules, onClose }: {
                       {/* Modul toplami OZET karti: alttaki tekil ay kartlarindan (bkz.
                           asagida) KESINLIKLE farkli gorunmeli — esnaf "bu bir aylik
                           kayit degil, genel toplam" diye bir bakista ayirt edebilsin.
-                          Modul rengiyle vurgulu arkaplan + kalin cerceve + "ÖZET"
-                          rozeti (bkz. kullanici geri bildirimi). */}
+                          Soft/pastel ton yerine (bkz. kullanici geri bildirimi: "renkler
+                          hosuma gitmedi") DOLU, koyu marka rengi + beyaz yazi — Excel
+                          disa aktarimindaki AYNI dil (bkz. kullanici onayi: "renkler
+                          mukemmel"). moduleAccent[...].light KASITLI kullanilir: dark
+                          teması içindeki .dark tonu (parlak/pastel, koyu zeminde METIN
+                          icin tasarlandi) burada dolgu rengi olarak kullanilirsa beyaz
+                          yaziyla kontrasti dusuk kalirdi. */}
                       {m.data.length > 0 && (
                         <View style={{
                           gap: spacing.xs,
-                          backgroundColor: dark ? moduleAccent[m.module].darkSoft : moduleAccent[m.module].lightSoft,
+                          backgroundColor: moduleAccent[m.module].light,
                           borderRadius: radius.md, padding: spacing.md,
-                          borderWidth: 1.5,
-                          borderColor: dark ? moduleAccent[m.module].dark : moduleAccent[m.module].light,
                         }}>
-                          <Txt variant="tiny" color={dark ? moduleAccent[m.module].dark : moduleAccent[m.module].light} style={{ fontWeight: '800', letterSpacing: 0.5 }}>
+                          <Txt variant="tiny" color="#FFFFFF" style={{ fontWeight: '800', letterSpacing: 0.5 }}>
                             📊 TOPLAM ÖZET · SEÇİLİ ARALIK
                           </Txt>
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-                            <BreakdownStat label="Toplam Beklenen" value={moduleTotals.expected} color={c.textMuted} />
-                            <BreakdownStat label="Toplam Tahsil" value={moduleTotals.collected} color={c.ok} />
-                            <BreakdownStat label="Kalan" value={moduleTotals.balance} color={c.danger} />
+                            <BreakdownStat label="Toplam Beklenen" value={moduleTotals.expected} color="#FFFFFF" labelColor="rgba(255,255,255,0.75)" />
+                            <BreakdownStat label="Toplam Tahsil" value={moduleTotals.collected} color="#FFFFFF" labelColor="rgba(255,255,255,0.75)" />
+                            <BreakdownStat label="Kalan" value={moduleTotals.balance} color="#FFFFFF" labelColor="rgba(255,255,255,0.75)" />
                           </View>
                         </View>
                       )}

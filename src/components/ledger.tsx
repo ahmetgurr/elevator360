@@ -114,7 +114,6 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
   // net gorunsun — bkz. kullanici geri bildirimi (Bozyel 4 senaryosu):
   // Temmuz karti kendi basina borclu gorunse bile, site Agustos'ta toplu
   // odemeyle kapanmis olabilir.
-  const isPastPeriod = row.period < currentPeriod();
   const finalState = finalBalanceState(num(row.site_current_balance));
 
   return (
@@ -196,23 +195,31 @@ export function LedgerListItem({ row, onPress }: { row: LedgerRow; onPress: (r: 
           </Txt>
         </View>
       )}
+      {/* "Bu Dönemden Önceki" ile BASKA — deger bu SATIRIN doneminden ONCEKI
+          aylarin toplamidir, farkli ay kartlarina bakildikca DEGISIR (bkz.
+          kullanici geri bildirimi: ay ay farkli rakam gorunmesi kafa
+          karistirdi). Sabit/TEK toplam icin asagidaki "Sitenin Güncel
+          Bakiyesi (Bugün)" paneli kullanilir. */}
       {isActive && !isOverpaidThisMonth && hasCarriedOverDebt && (
         <View style={{
           backgroundColor: c.dangerSoft, borderRadius: radius.sm,
           paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, alignSelf: 'flex-start',
         }}>
           <Txt variant="tiny" color={c.danger} style={{ fontWeight: '700' }}>
-            ⚠ Geçmişten Devreden Borç: {money(carriedOver)}
+            ⚠ Bu Dönemden Önceki Devreden Borç: {money(carriedOver)}
           </Txt>
         </View>
       )}
       {isActive && !hasCarriedOverDebt && !carryoverCleared && looksSettled && (
-        <Txt variant="tiny" color={c.ok}>✓ Geçmişten devreden borcu yok</Txt>
+        <Txt variant="tiny" color={c.ok}>✓ Bu dönemden önceki devreden borcu yok</Txt>
       )}
 
-      {/* Gecmis bir ay kartinda olsak bile sitenin BUGUNKU nihai durumu —
-          bkz. kullanici geri bildirimi (Bozyel 4 senaryosu) */}
-      {isActive && isPastPeriod && (
+      {/* ARTIK isPastPeriod ile SINIRLI DEGIL — sitenin TUM verilerine gore
+          hesaplanan TEK, SABIT toplami gosterir; hangi ay kartina bakilirsa
+          bakilsin AYNI kalir (bkz. kullanici geri bildirimi: "o tutar öyle
+          her aya göre değişmeyecek, tüm veriler esas alınarak
+          hesaplanması gerekiyor" — Bozyel 4 senaryosu). */}
+      {isActive && (
         <View style={{
           backgroundColor: finalState.kind === 'debt' ? c.dangerSoft : c.okSoft,
           borderRadius: radius.sm,

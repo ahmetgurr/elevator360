@@ -529,9 +529,16 @@ export function usePostTransaction(module: ModuleType, period: string) {
       if (error) throw new Error(translateDbError(error.message));
       return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ledgerKey(module, period) });
-      qc.invalidateQueries({ queryKey: ['summary', module, period] });
+    // Odeme artik TEK bir doneme degil, sinamik olarak (otomatik selale
+    // mahsuplasma — bkz. 0015_payment_waterfall.sql) GECMIS acik aylara da
+    // dagitilabildigi icin, invalidasyon TEK donem/tuple ile SINIRLI
+    // KALAMAZ — modulun TUM donem cache'leri (prefix eslesme) ve dokunulan
+    // sitenin Cari Ekstre gecmisi de taze olmali.
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['ledger', module] });
+      qc.invalidateQueries({ queryKey: ['summary', module] });
+      qc.invalidateQueries({ queryKey: ['site-history', vars.siteId, module] });
+      qc.invalidateQueries({ queryKey: ['range-summary', module] });
     },
   });
 }

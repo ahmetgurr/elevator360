@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { glassColors, useTheme } from '@/lib/theme';
 import { usePostTransaction, useSetLedgerSkipped, useSiteHistory, useUpdateNote } from '@/lib/api';
-import { currentPeriod, money, num, parseAmount, periodFileLabel, periodLabel } from '@/lib/format';
+import { money, num, parseAmount, periodFileLabel, periodLabel } from '@/lib/format';
 import { exportSiteStatementCsv } from '@/lib/export';
 import { finalBalanceState, overpaidAmount, type LedgerRow, type ModuleType, type StatusKey } from '@/lib/types';
 import { StatusPill } from './ledger';
@@ -192,7 +192,6 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
     : thisMonthOverpaidAmount !== null
       ? { label: 'Bu Ay Fazla Ödenen', value: String(thisMonthOverpaidAmount), color: c.ok }
       : { label: 'Bu Ay Kalan', value: row.balance, color: num(row.balance) > 0 ? c.danger : c.ok };
-  const isPastPeriod = row.period < currentPeriod();
   const finalState = finalBalanceState(num(row.site_current_balance));
 
   const noteItems: NoteItem[] = [];
@@ -304,13 +303,21 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                   <Txt variant="h3" color={c.danger}>{money(netAfterCarryover)}</Txt>
                 </View>
               )}
+              {/* Bu etiket BILEREK "Bu Dönemden Önceki" ile baslar — DEGERI bu
+                  satirin doneminden ONCEKI aylarin toplamidir, o yuzden farkli
+                  ay kartlarina bakildikca DEGISIR (bkz. kullanici geri
+                  bildirimi: "Haziran'da bir rakam, Temmuz'da baska rakam
+                  yazıyor, kafam karıştı"). Sabit/tek TOPLAM rakam icin asagidaki
+                  "Sitenin Güncel Bakiyesi (Bugün)" panelı kullanılır — o HER
+                  ZAMAN aynı (tüm veriler esas alınarak hesaplanır, hangi ay
+                  kartına bakılırsa bakılsın değişmez). */}
               {hasCarriedOver && !carryoverCleared && !carryoverStillOwed && (
                 <View style={{
                   backgroundColor: carriedOverAmount > 0 ? c.dangerSoft : c.okSoft,
                   borderRadius: radius.md, padding: spacing.md, gap: 2,
                 }}>
                   <Txt variant="tiny" color={carriedOverAmount > 0 ? c.danger : c.ok}>
-                    {carriedOverAmount > 0 ? 'Geçmişten Devreden Borç' : 'Geçmişten Devreden Alacak (Fazla Ödeme)'}
+                    {carriedOverAmount > 0 ? 'Bu Dönemden Önceki Devreden Borç' : 'Bu Dönemden Önceki Devreden Alacak (Fazla Ödeme)'}
                   </Txt>
                   <Txt variant="h3" color={carriedOverAmount > 0 ? c.danger : c.ok}>
                     {money(Math.abs(carriedOverAmount))}
@@ -324,8 +331,14 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                 <MiniStat label={thisMonthRemaining.label} value={thisMonthRemaining.value} color={thisMonthRemaining.color} />
               </View>
 
-              {isPastPeriod && (
-                <View style={{
+              {/* ARTIK isPastPeriod ile SINIRLI DEGIL — bu panel sitenin TUM
+                  verilerine gore hesaplanan TEK, SABIT toplami gosterir; hangi
+                  ay kartina bakilirsa bakilsin AYNI kalir (bkz. kullanici geri
+                  bildirimi: "o tutar öyle her aya göre değişmeyecek, tüm
+                  veriler esas alınarak hesaplanması gerekiyor"). Once sadece
+                  gecmis ay kartlarinda gorunuyordu; simdi HER ay kartinda
+                  (gecmis/guncel/gelecek) goruntulenir. */}
+              <View style={{
                   backgroundColor: finalState.kind === 'debt' ? c.dangerSoft : c.okSoft,
                   borderRadius: radius.md, padding: spacing.md, gap: 2,
                 }}>
@@ -339,8 +352,7 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                         ? `${money(finalState.amount)} Alacaklı (Fazla Ödeme)`
                         : 'Sıfırlandı (Borcu Yok)'}
                   </Txt>
-                </View>
-              )}
+              </View>
 
               <Txt variant="tiny" color={c.textFaint}>
                 Ödeme Günü: {row.service_day ? `Ayın ${row.service_day}'i` : 'Belirtilmemiş'}

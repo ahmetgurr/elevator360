@@ -503,8 +503,8 @@ function BalanceDonutChart({ expected, collected, balance }: {
     () =>
       expected > 0
         ? [
-            { value: collected, color: '#059669', onPress: () => showSlice('tahsil') },
-            { value: balance, color: '#D32F2F', onPress: () => showSlice('kalan') },
+            { value: collected, color: glassColors.accentLight, onPress: () => showSlice('tahsil') },
+            { value: balance, color: glassColors.danger, onPress: () => showSlice('kalan') },
           ]
         : [{ value: 1, color: glassColors.trackBg }],
     [expected, collected, balance],
@@ -554,7 +554,7 @@ function BalanceDonutChart({ expected, collected, balance }: {
           <View style={styles.sliceTooltip} pointerEvents="none">
             <View style={styles.sliceTooltipBox}>
               <View style={styles.sliceTooltipHeader}>
-                <View style={[styles.legendDot, { backgroundColor: activeSlice === 'tahsil' ? '#059669' : '#D32F2F' }]} />
+                <View style={[styles.legendDot, { backgroundColor: activeSlice === 'tahsil' ? glassColors.accentLight : glassColors.danger }]} />
                 <Txt variant="tiny" color={glassColors.textSecondary} numberOfLines={1}>
                   {activeSlice === 'tahsil' ? `%${collectedPct} Tahsil Edilen` : `%${balancePct} Kalan Alacak`}
                 </Txt>
@@ -572,14 +572,14 @@ function BalanceDonutChart({ expected, collected, balance }: {
 
       <View style={styles.legendCol}>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#059669' }]} />
+          <View style={[styles.legendDot, { backgroundColor: glassColors.accentLight }]} />
           <View style={{ flexShrink: 1 }}>
             <Txt variant="tiny" color={glassColors.textSecondary}>Tahsil Edilen</Txt>
             <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{money(collected)}</Txt>
           </View>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#D32F2F' }]} />
+          <View style={[styles.legendDot, { backgroundColor: glassColors.danger }]} />
           <View style={{ flexShrink: 1 }}>
             <Txt variant="tiny" color={glassColors.textSecondary}>Kalan Alacak</Txt>
             <Txt variant="small" color={glassColors.textPrimary} style={{ fontWeight: '700' }}>{money(balance)}</Txt>

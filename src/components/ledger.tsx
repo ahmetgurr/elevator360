@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, UIManager, View } from 'react-native';
+import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { glassColors, glassTextShadow, moduleAccent, statusColors, useTheme } from '@/lib/theme';
@@ -12,13 +12,6 @@ import { useRangeSummary, type ProjectedSite, type RangePeriodSummary } from '@/
 import { PeriodSwitcher } from './pickers';
 import { ModalShell, Txt } from './ui';
 import { GlassCard, GlassProgressBar, GradientButton, androidRipple, pressScaleStyle, bounceScrollProps } from './Glass';
-
-// Android'de LayoutAnimation varsayilan olarak kapali — "Genel Kasa Ozeti"
-// grafik/detay gecisinin (bkz. CashSummaryPanel) yukseklik degisimini
-// yumusakca animasyonlu yapabilmesi icin bir kez acilir.
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 /* ------------------------------ Durum rozeti ---------------------------- */
 

@@ -69,11 +69,11 @@ export default function ModulePickerScreen() {
         <View style={styles.headerRow}>
           <View style={styles.headerBrand}>
             <Image
-              source={require('../../assets/images/new_logo.png')}
+              source={require('../../assets/images/logoandsplash.png')}
               style={styles.logoBadge}
               resizeMode="contain"
             />
-            <Txt variant="h3" color={glassColors.textPrimary}>Elevator360</Txt>
+            <Txt variant="h2" color={glassColors.textPrimary}>Mizan</Txt>
           </View>
           <Pressable
             onPress={handleSignOut} hitSlop={8}

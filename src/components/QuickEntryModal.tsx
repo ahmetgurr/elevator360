@@ -3,7 +3,7 @@ import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-
 import { glassColors, useTheme } from '@/lib/theme';
 import { usePostTransaction, useSetLedgerSkipped, useSiteHistory, useUpdateNote } from '@/lib/api';
 import { money, num, parseAmount, periodFileLabel, periodLabel } from '@/lib/format';
-import { exportSiteStatementCsv } from '@/lib/export';
+import { exportSiteStatementExcel } from '@/lib/export';
 import { finalBalanceState, overpaidAmount, type LedgerRow, type ModuleType, type StatusKey } from '@/lib/types';
 import { StatusPill } from './ledger';
 import { EditSiteModal } from './EditSiteModal';
@@ -397,9 +397,23 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
                       opacity: h.is_skipped ? 0.55 : 1,
                     }, pressScaleStyle(pressed)]}
                   >
-                    <Txt variant="small" color={c.textMuted}>{periodLabel(h.period)}</Txt>
-                    <StatusPill statusKey={h.status_key} label={h.status_label} small />
-                    <Txt variant="moneySm" color={num(h.balance) > 0 ? c.danger : c.ok}>{money(h.balance)}</Txt>
+                    {/* Sabit genislikli 3 "kolon" — StatusPill etiketi satirdan
+                        satira uzunluk degistirdiginde (ornek: "Ödeme Süresi
+                        Geçti" vs "Bu Ay Pasife Alındı") justifyContent:
+                        'space-between' araligi da degisiyor, tutarlar hizasiz
+                        gorunuyordu (bkz. kullanici geri bildirimi: "cümle
+                        nerede bittiyse oradan devam etmiş, estetik durmuyor").
+                        Donem sabit genislikte sola, tutar sabit min-genislikte
+                        saga kilitlenir; rozet ortada kalan alani kullanir. */}
+                    <View style={{ width: 84 }}>
+                      <Txt variant="small" color={c.textMuted} numberOfLines={1}>{periodLabel(h.period)}</Txt>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <StatusPill statusKey={h.status_key} label={h.status_label} small />
+                    </View>
+                    <Txt variant="moneySm" color={num(h.balance) > 0 ? c.danger : c.ok} style={{ minWidth: 76, textAlign: 'right' }}>
+                      {money(h.balance)}
+                    </Txt>
                   </Pressable>
                 ))}
               </View>
@@ -544,7 +558,7 @@ export function SiteStatementModal({ visible, siteName, module, currentRow, hist
     setExportError('');
     try {
       const fileName = `${siteName.replace(/[^\p{L}\p{N}]+/gu, '_')}_Cari_Ekstre_${periodFileLabel(currentRow!.period)}`;
-      await exportSiteStatementCsv(rows, siteName, fileName);
+      await exportSiteStatementExcel(rows, siteName, fileName);
     } catch (err) {
       setExportError('Dışa aktarma başarısız oldu.');
     } finally {

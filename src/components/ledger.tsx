@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Easing, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { glassColors, glassTextShadow, moduleAccent, statusColors, useTheme } from '@/lib/theme';
@@ -13,6 +13,67 @@ import { exportRangeSummaryExcel, type RangeExcelRow } from '@/lib/export';
 import { PeriodSwitcher } from './pickers';
 import { ModalShell, Txt } from './ui';
 import { GlassCard, GlassProgressBar, GradientButton, androidRipple, pressScaleStyle, bounceScrollProps } from './Glass';
+
+/* ------------------------- Grafik/Detay gecis anahtari ------------------- */
+
+const TOGGLE_BTN_SIZE = 40;
+const TOGGLE_PADDING = 3;
+
+/**
+ * Grafik ⇄ Detay gecis anahtari — Dashboard'daki "Genel Kasa Özeti" ile
+ * modul ekranindaki "Bilanço Özeti" BIREBIR AYNI bileseni kullanir. Eskiden
+ * her iki dugme de kendi kenarligini/arkaplanini bagimsiz degistiriyordu
+ * (bkz. kullanici geri bildirimi: "kenarlı köşeli şeffaf tuşa basıyormuşum
+ * gibi duruyor, kenarlı olmasın"). Simdi TEK bir "thumb" (kayan vurgu)
+ * secili tarafa doğru YUMUŞAKÇA kayar (bkz. kullanici geri bildirimi: "düğme
+ * kaydırıyormuş gibi soft bir geçiş olsun") — dugmelerin kendisinde ARTIK
+ * kenarlık/arkaplan degisimi yok, sadece ikon rengi degisir.
+ */
+function ChartDetailToggle({ mode, onChange }: {
+  mode: 'chart' | 'details';
+  onChange: (mode: 'chart' | 'details') => void;
+}) {
+  const thumbX = useRef(new Animated.Value(mode === 'chart' ? 0 : 1)).current;
+
+  useEffect(() => {
+    Animated.timing(thumbX, {
+      toValue: mode === 'chart' ? 0 : 1,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [mode]);
+
+  return (
+    <View style={styles.viewToggle}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.viewToggleThumb,
+          {
+            transform: [{
+              translateX: thumbX.interpolate({ inputRange: [0, 1], outputRange: [0, TOGGLE_BTN_SIZE] }),
+            }],
+          },
+        ]}
+      />
+      <Pressable
+        onPress={() => onChange('chart')}
+        android_ripple={androidRipple}
+        style={styles.viewToggleBtn}
+      >
+        <Ionicons name="pie-chart" size={20} color={mode === 'chart' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
+      </Pressable>
+      <Pressable
+        onPress={() => onChange('details')}
+        android_ripple={androidRipple}
+        style={styles.viewToggleBtn}
+      >
+        <Ionicons name="document-text" size={20} color={mode === 'details' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
+      </Pressable>
+    </View>
+  );
+}
 
 /* ------------------------------ Durum rozeti ---------------------------- */
 
@@ -321,22 +382,7 @@ export function SummaryStrip({ summary }: { summary: PeriodSummary | null | unde
           "boş kaldı" gorundugu icin (bkz. kullanici geri bildirimi) yanina
           kart basligi eklendi. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-        <View style={styles.viewToggle}>
-          <Pressable
-            onPress={() => changeViewMode('chart')}
-            android_ripple={androidRipple}
-            style={({ pressed }) => [styles.viewToggleBtn, viewMode === 'chart' && styles.viewToggleBtnActive, pressScaleStyle(pressed)]}
-          >
-            <Ionicons name="pie-chart" size={20} color={viewMode === 'chart' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
-          </Pressable>
-          <Pressable
-            onPress={() => changeViewMode('details')}
-            android_ripple={androidRipple}
-            style={({ pressed }) => [styles.viewToggleBtn, viewMode === 'details' && styles.viewToggleBtnActive, pressScaleStyle(pressed)]}
-          >
-            <Ionicons name="document-text" size={20} color={viewMode === 'details' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
-          </Pressable>
-        </View>
+        <ChartDetailToggle mode={viewMode} onChange={changeViewMode} />
         <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1}>Bilanço Özeti</Txt>
       </View>
 
@@ -681,22 +727,7 @@ export function CashSummaryPanel({
         <>
           {/* Grafik / Sayısal detay gecis anahtari — bkz. kullanici geri
               bildirimi: Ziraat Bankası Borsa uygulamasi tarzi ikili toggle. */}
-          <View style={styles.viewToggle}>
-            <Pressable
-              onPress={() => changeViewMode('chart')}
-              android_ripple={androidRipple}
-              style={({ pressed }) => [styles.viewToggleBtn, viewMode === 'chart' && styles.viewToggleBtnActive, pressScaleStyle(pressed)]}
-            >
-              <Ionicons name="pie-chart" size={20} color={viewMode === 'chart' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
-            </Pressable>
-            <Pressable
-              onPress={() => changeViewMode('details')}
-              android_ripple={androidRipple}
-              style={({ pressed }) => [styles.viewToggleBtn, viewMode === 'details' && styles.viewToggleBtnActive, pressScaleStyle(pressed)]}
-            >
-              <Ionicons name="document-text" size={20} color={viewMode === 'details' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
-            </Pressable>
-          </View>
+          <ChartDetailToggle mode={viewMode} onChange={changeViewMode} />
 
           {viewMode === 'chart' ? (
             <BalanceDonutChart expected={totals.expected} collected={totals.collected} balance={totals.balance} />
@@ -880,27 +911,31 @@ function RangeSummaryModal({ visible, modules, onClose }: {
             padding: spacing.lg, gap: spacing.md, flexShrink: 0,
             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder,
           }}>
-            {/* Baslik TEK BASINA kendi satirinda — uzun baslik ("Tarih Aralığı
-                Bilançosu") + pil buton AYNI satirda basinca/dar ekranlarda
-                garip sikisiyordu (bkz. kullanici geri bildirimi). Buton
-                simdi ayri, sag hizali bir satirda. */}
-            <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1}>Tarih Aralığı Bilançosu</Txt>
-            <Pressable
-              onPress={handleExportExcel}
-              disabled={excelExporting || !rangeValid || excelRows.length === 0}
-              hitSlop={8}
-              android_ripple={androidRipple}
-              style={({ pressed }) => [{
-                flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4,
-                backgroundColor: c.accentSoft, borderRadius: radius.pill,
-                paddingVertical: 6, paddingHorizontal: 12,
-                opacity: (!rangeValid || excelRows.length === 0) ? 0.4 : pressed && Platform.OS === 'ios' ? 0.7 : 1,
-              }, pressScaleStyle(pressed)]}
-            >
-              <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>
-                {excelExporting ? '…' : '📥 Excel'}
-              </Txt>
-            </Pressable>
+            {/* Baslik + "Dışa Aktar" pili AYNI satirda, dikey ortalanmis —
+                diger ekranlardaki (SiteStatementModal, [module]/index.tsx)
+                "⬇︎ Dışa Aktar" pilleriyle AYNI etiket/stil (bkz. kullanici
+                geri bildirimi: "Excel yazısı yerine Dışa Aktar yazsın,
+                diğerleri gibi olsun"). Yukleme sirasinda metin "…" ile
+                DEGISTIRILMEZ — buton oldugu gibi kalir, sadece opaklik
+                (disabled durumuyla AYNI dil) meşgul oldugunu belli eder. */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
+              <Txt variant="h3" color={glassColors.textPrimary} numberOfLines={1} style={{ flexShrink: 1 }}>Tarih Aralığı Bilançosu</Txt>
+              <Pressable
+                onPress={handleExportExcel}
+                disabled={excelExporting || !rangeValid || excelRows.length === 0}
+                hitSlop={8}
+                android_ripple={androidRipple}
+                style={({ pressed }) => [{
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  backgroundColor: c.accentSoft, borderRadius: radius.pill,
+                  paddingVertical: 6, paddingHorizontal: 12,
+                  opacity: excelExporting || !rangeValid || excelRows.length === 0
+                    ? 0.4 : pressed && Platform.OS === 'ios' ? 0.7 : 1,
+                }, pressScaleStyle(pressed)]}
+              >
+                <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>⬇︎ Dışa Aktar</Txt>
+              </Pressable>
+            </View>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Txt variant="tiny" color={c.textFaint}>Başlangıç Ayı</Txt>
@@ -972,11 +1007,18 @@ function RangeSummaryModal({ visible, modules, onClose }: {
                           icin tasarlandi) burada dolgu rengi olarak kullanilirsa beyaz
                           yaziyla kontrasti dusuk kalirdi. */}
                       {m.data.length > 0 && (
-                        <View style={{
-                          gap: spacing.xs,
-                          backgroundColor: moduleAccent[m.module].light,
-                          borderRadius: radius.md, padding: spacing.md,
-                        }}>
+                        // Karta tıklayınca da açılıp kapansın — eskiden SADECE üstteki
+                        // kucuk ok (▾/▴) tikleniyordu (bkz. kullanici geri bildirimi:
+                        // "karta tıklayınca olsun istiyorum"). AYNI setCollapsed toggle'i.
+                        <Pressable
+                          onPress={() => setCollapsed(prev => ({ ...prev, [m.module]: !isCollapsed }))}
+                          android_ripple={androidRipple}
+                          style={({ pressed }) => [{
+                            gap: spacing.xs,
+                            backgroundColor: moduleAccent[m.module].light,
+                            borderRadius: radius.md, padding: spacing.md,
+                          }, pressScaleStyle(pressed)]}
+                        >
                           <Txt variant="tiny" color="#FFFFFF" style={{ fontWeight: '800', letterSpacing: 0.5 }}>
                             📊 TOPLAM ÖZET · SEÇİLİ ARALIK
                           </Txt>
@@ -985,7 +1027,7 @@ function RangeSummaryModal({ visible, modules, onClose }: {
                             <BreakdownStat label="Toplam Tahsil" value={moduleTotals.collected} color="#FFFFFF" labelColor="rgba(255,255,255,0.75)" />
                             <BreakdownStat label="Kalan" value={moduleTotals.balance} color="#FFFFFF" labelColor="rgba(255,255,255,0.75)" />
                           </View>
-                        </View>
+                        </Pressable>
                       )}
 
                       {!isCollapsed && (
@@ -1017,17 +1059,23 @@ function RangeSummaryModal({ visible, modules, onClose }: {
 }
 
 const styles = StyleSheet.create({
+  // Kenarlik BILEREK YOK (bkz. kullanici geri bildirimi: "kenarlı köşeli
+  // şeffaf tuşa basıyormuşum gibi duruyor, kenarlı olmasın") — secili durum
+  // artik sadece kayan "thumb" (asagida) ile gosterilir.
   viewToggle: {
-    flexDirection: 'row', alignSelf: 'flex-start', gap: 2,
-    backgroundColor: 'rgba(5,10,25,0.45)', borderRadius: 999, padding: 3,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row', alignSelf: 'flex-start', gap: 0,
+    backgroundColor: 'rgba(5,10,25,0.45)', borderRadius: 999, padding: TOGGLE_PADDING,
+    position: 'relative',
+  },
+  // Secili tarafa YUMUŞAKÇA kayan vurgu — bkz. ChartDetailToggle (Animated.timing).
+  viewToggleThumb: {
+    position: 'absolute', top: TOGGLE_PADDING, left: TOGGLE_PADDING,
+    width: TOGGLE_BTN_SIZE, height: TOGGLE_BTN_SIZE, borderRadius: 999,
+    backgroundColor: 'rgba(37,99,235,0.55)',
   },
   viewToggleBtn: {
-    paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999,
-    borderWidth: 1, borderColor: 'transparent',
-  },
-  viewToggleBtnActive: {
-    backgroundColor: 'rgba(37,99,235,0.35)', borderColor: 'rgba(96,165,250,0.5)',
+    width: TOGGLE_BTN_SIZE, height: TOGGLE_BTN_SIZE,
+    alignItems: 'center', justifyContent: 'center', borderRadius: 999,
   },
   // Grafik + legend'i yan yana yerlestiren satir — bkz. kullanici geri
   // bildirimi: "legend grafigin altina degil, sagina tasinsin". Mobilde

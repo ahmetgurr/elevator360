@@ -9,7 +9,7 @@ import {
 } from '@/lib/api';
 import { ModuleThemeProvider, glassColors, useTheme } from '@/lib/theme';
 import { currentPeriod, isFuturePeriod, periodFileLabel, periodLabel } from '@/lib/format';
-import { exportLedgerCsv } from '@/lib/export';
+import { exportLedgerExcel } from '@/lib/export';
 import {
   MODULE_FILE_LABEL, MODULE_LABEL, QUICK_FILTERS, SORT_OPTIONS, matchesQuickFilter, sortLedgerRows,
   type LedgerRow, type ModuleType, type QuickFilterKey, type SortKey,
@@ -86,8 +86,8 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
     setExporting(true);
     try {
       const fileName = `${MODULE_FILE_LABEL[module] ?? 'Rapor'}_${periodFileLabel(period)}_Raporu`;
-      await exportLedgerCsv(data, fileName, { period, summary: summary.data ?? null });
-      setToast({ visible: true, variant: 'success', message: 'CSV raporu hazırlandı.' });
+      await exportLedgerExcel(data, fileName, { period, summary: summary.data ?? null, module });
+      setToast({ visible: true, variant: 'success', message: 'Excel raporu hazırlandı.' });
     } catch (err) {
       setToast({ visible: true, variant: 'error', message: 'Dışa aktarma başarısız oldu.' });
     } finally {

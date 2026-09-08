@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { glassColors, useTheme } from '@/lib/theme';
 import { Field, Txt } from '@/components/ui';
@@ -43,8 +43,18 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           {...bounceScrollProps}
         >
-          <View style={{ gap: spacing.xs, alignItems: 'center' }}>
-            <Txt variant="h1" color={glassColors.textPrimary}>Elevator360</Txt>
+          {/* Logo GORSELI zaten "MIZAN" yazisini icinde barindiriyor — ayrica
+              buyuk bir metin basligi eklemek (eski hali) acilis (splash)
+              ekranindan hemen sonra "Mizan" ismini İKİ FARKLI bicimde arka
+              arkaya gostererek "iki kere yaziyor gibi" bir izlenim
+              yaratiyordu (bkz. kullanici geri bildirimi). Simdi TEK, tutarli
+              bir gorsel kimlik: splash'taki AYNI logo buraya da tasinir. */}
+          <View style={{ gap: spacing.sm, alignItems: 'center' }}>
+            <Image
+              source={require('../../assets/images/logoandsplash.png')}
+              style={{ width: 140, height: 140 * (333 / 289) }}
+              resizeMode="contain"
+            />
             <Txt variant="small" color={glassColors.primaryLight}>Bakım ve Tahsilat Takip Sistemi</Txt>
           </View>
 

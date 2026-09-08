@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Elevator360",
+    "name": "Mizan",
     "slug": "elevator360",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/new_logo.png",
+    "icon": "./assets/images/logoandsplash.png",
     "scheme": "elevator360",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -31,7 +31,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#0B1220",
-          "image": "./assets/images/new_logo.png",
+          "image": "./assets/images/logoandsplash.png",
           "imageWidth": 220
         }
       ],
@@ -42,7 +42,6 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "splash": {},
     "extra": {
       "router": {},
       "eas": {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, UIManager, View } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -25,7 +25,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 export function StatusPill({ statusKey, label, small }: {
   statusKey: string; label: string; small?: boolean;
 }) {
-  const { c, radius, spacing, font } = useTheme();
+  const { c, radius, spacing } = useTheme();
   const { fg, bg } = statusColors(c, statusKey);
   return (
     <View style={{
@@ -589,7 +589,7 @@ export function CashSummaryPanel({
   onOpenRange?: () => void;
   onCloseRange?: () => void;
 }) {
-  const { dark, spacing, radius } = useTheme();
+  const { dark, spacing } = useTheme();
   const [expanded, setExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<'chart' | 'details'>('chart');
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { glassColors, useTheme } from '@/lib/theme';
 import {
@@ -27,7 +27,7 @@ export function EditSiteModal({ visible, siteId, module, period, onClose, onSucc
   /** Kaydetme/fesih/aktiflestirme basarili oldugunda gosterilecek mesaj */
   onSuccess: (message: string) => void;
 }) {
-  const { c, spacing, radius } = useTheme();
+  const { c, spacing } = useTheme();
   const site = useSite(visible ? siteId : undefined);
   const mutation = useUpdateSiteDetails();
   const deactivate = useDeactivateSite();

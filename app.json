@@ -4,7 +4,7 @@
     "slug": "elevator360",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/new_logo.png",
     "scheme": "elevator360",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -29,8 +29,8 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0B1526",
-          "image": "./assets/images/logoapp.png",
+          "backgroundColor": "#0B1220",
+          "image": "./assets/images/new_logo.png",
           "imageWidth": 220
         }
       ],

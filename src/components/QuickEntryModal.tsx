@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { glassColors, useTheme } from '@/lib/theme';
 import { usePostTransaction, useSiteHistory, useUpdateNote } from '@/lib/api';
@@ -494,7 +494,7 @@ function NoteEditModal({ note, siteId, updateNote, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (ledgerId: string, newNotes: string | null) => void;
 }) {
-  const { c, spacing, radius } = useTheme();
+  const { c, spacing } = useTheme();
   const [text, setText] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const visible = !!note;

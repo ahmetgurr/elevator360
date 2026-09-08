@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { glassColors, useTheme } from '@/lib/theme';
 import { periodLabel, shiftPeriod, currentPeriod } from '@/lib/format';

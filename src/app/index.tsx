@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { usePeriodSummary, useProjectedSummary } from '@/lib/api';
@@ -68,9 +68,11 @@ export default function ModulePickerScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }} {...bounceScrollProps}>
         <View style={styles.headerRow}>
           <View style={styles.headerBrand}>
-            <View style={styles.logoBadge}>
-              <Txt variant="h3" color={glassColors.textPrimary}>▲</Txt>
-            </View>
+            <Image
+              source={require('../../assets/images/new_logo.png')}
+              style={styles.logoBadge}
+              resizeMode="contain"
+            />
             <Txt variant="h3" color={glassColors.textPrimary}>Elevator360</Txt>
           </View>
           <Pressable

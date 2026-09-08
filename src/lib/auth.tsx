@@ -51,10 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .select('id, full_name, role, allowed_modules, is_active')
       .eq('id', session.user.id)
       .single()
-      .then(({ data, error }) => {
+      .then(({ data }) => {
         if (!alive) return;
-        // __DEV__: sadece gelistirme derlemesinde loglanir, production'a sizmaz.
-        if (error && __DEV__) console.warn('Profil okunamadi:', error.message);
         setProfile((data as Profile) ?? null);
         setLoading(false);
       });

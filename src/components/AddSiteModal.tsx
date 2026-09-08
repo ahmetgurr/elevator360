@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { glassColors, useTheme } from '@/lib/theme';
 import { useCreateSite } from '@/lib/api';
@@ -20,7 +20,7 @@ export function AddSiteModal({ visible, module, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: (site: { id: string; name: string }) => void;
 }) {
-  const { c, spacing, radius } = useTheme();
+  const { c, spacing } = useTheme();
   const mutation = useCreateSite();
 
   const [name, setName] = useState('');

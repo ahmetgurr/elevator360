@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { glassColors, useTheme } from '@/lib/theme';

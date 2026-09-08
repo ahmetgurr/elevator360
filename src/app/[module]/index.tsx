@@ -360,9 +360,11 @@ function LedgerListScreenInner({ module }: { module: ModuleType }) {
       <SiteStatementModal
         visible={!!statement}
         siteName={statement?.siteName ?? ''}
+        module={module}
         currentRow={statement?.currentRow ?? null}
         historyRows={statement?.historyRows ?? []}
         onClose={() => setStatement(null)}
+        onChanged={message => setToast({ visible: true, variant: 'success', message })}
       />
 
       <EditSiteModal

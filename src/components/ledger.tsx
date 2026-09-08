@@ -3,12 +3,13 @@ import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, View } fr
 import { PieChart } from 'react-native-gifted-charts';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { glassColors, glassTextShadow, moduleAccent, statusColors, useTheme } from '@/lib/theme';
-import { currentPeriod, dayLabel, isFuturePeriod, money, moneyShort, num, periodLabel } from '@/lib/format';
+import { currentPeriod, dayLabel, isFuturePeriod, money, moneyShort, num, periodFileLabel, periodLabel, shiftPeriod } from '@/lib/format';
 import {
   MODULE_LABEL, finalBalanceState, isUnrealizedFuture, overpaidAmount,
   type LedgerRow, type ModuleType, type PeriodSummary,
 } from '@/lib/types';
 import { useRangeSummary, type ProjectedSite, type RangePeriodSummary } from '@/lib/api';
+import { exportRangeSummaryExcel, type RangeExcelRow } from '@/lib/export';
 import { PeriodSwitcher } from './pickers';
 import { ModalShell, Txt } from './ui';
 import { GlassCard, GlassProgressBar, GradientButton, androidRipple, pressScaleStyle, bounceScrollProps } from './Glass';
@@ -774,6 +775,8 @@ function RangeSummaryModal({ visible, modules, onClose }: {
   const [startPeriod, setStartPeriod] = useState(`${new Date().getFullYear()}-01-01`);
   const [endPeriod, setEndPeriod] = useState(currentPeriod());
   const [collapsed, setCollapsed] = useState<Partial<Record<ModuleType, boolean>>>({});
+  const [excelExporting, setExcelExporting] = useState(false);
+  const [excelError, setExcelError] = useState('');
 
   const elevatorRange = useRangeSummary('elevator', startPeriod, endPeriod, visible && modules.includes('elevator'));
   const cleaningRange = useRangeSummary('cleaning', startPeriod, endPeriod, visible && modules.includes('cleaning'));
@@ -797,13 +800,89 @@ function RangeSummaryModal({ visible, modules, onClose }: {
     { expected: 0, collected: 0, balance: 0 },
   );
 
+  // Excel için modül bazlı satırlar TEK bir "Dönem" satırında birleştirilir
+  // — Excel'in bir sekmeden okunuşu, ekrandaki modül bazlı kırılımdan farklı
+  // olarak Genel + Asansör + Temizlik'i yan yana ister (bkz. kullanıcı talebi:
+  // "esnafın açtığında bir bakışta anlayacağı sadelik"). En eskiden en
+  // yeniye sıralanır — bir yıllık dökümün doğal okuma sırası.
+  //
+  // ÖNEMLİ: satır listesi SADECE veritabanında kaydı olan (v_period_summary'de
+  // satırı bulunan) dönemlerden değil, kullanıcının SEÇTİĞİ [startPeriod,
+  // endPeriod] aralığındaki HER AYDAN üretilir (bkz. kullanıcı geri bildirimi:
+  // "Şubat'ta veri yok diye Excel'de Şubat hiç görünmüyordu, seçtiğim aydan
+  // itibaren görmek istiyorum — sıfırsa sıfır görünsün"). Veri olmayan bir ay
+  // için o modülün 0/0/0 olarak görünmesi DOĞRU davranıştır.
+  const excelRows: RangeExcelRow[] = useMemo(() => {
+    if (!rangeValid) return [];
+    const byPeriod = new Map<string, { elevator?: RangePeriodSummary; cleaning?: RangePeriodSummary }>();
+    for (const p of elevatorRange.data ?? []) byPeriod.set(p.period, { ...byPeriod.get(p.period), elevator: p });
+    for (const p of cleaningRange.data ?? []) byPeriod.set(p.period, { ...byPeriod.get(p.period), cleaning: p });
+
+    const periods: string[] = [];
+    for (let p = startPeriod; p <= endPeriod; p = shiftPeriod(p, 1)) periods.push(p);
+
+    return periods.map(period => {
+      const { elevator: el, cleaning: cl } = byPeriod.get(period) ?? {};
+      const elevatorExpected = el?.total_expected ?? 0;
+      const elevatorCollected = el?.total_collected ?? 0;
+      const elevatorBalance = el?.total_balance ?? 0;
+      const cleaningExpected = cl?.total_expected ?? 0;
+      const cleaningCollected = cl?.total_collected ?? 0;
+      const cleaningBalance = cl?.total_balance ?? 0;
+      return {
+        period,
+        generalExpected: elevatorExpected + cleaningExpected,
+        generalCollected: elevatorCollected + cleaningCollected,
+        generalBalance: elevatorBalance + cleaningBalance,
+        elevatorExpected, elevatorCollected, elevatorBalance,
+        cleaningExpected, cleaningCollected, cleaningBalance,
+      };
+    });
+  }, [elevatorRange.data, cleaningRange.data, startPeriod, endPeriod, rangeValid]);
+
+  async function handleExportExcel() {
+    if (excelExporting || excelRows.length === 0) return;
+    setExcelExporting(true);
+    setExcelError('');
+    try {
+      const fileName = `Yillik_Ozet_${periodFileLabel(startPeriod)}-${periodFileLabel(endPeriod)}`;
+      await exportRangeSummaryExcel(excelRows, fileName);
+    } catch (err) {
+      setExcelError('Excel dışa aktarma başarısız oldu.');
+    } finally {
+      setExcelExporting(false);
+    }
+  }
+
   return (
     <ModalShell visible={visible} onClose={onClose} maxHeightRatio={0.85}>
           <View style={{
             padding: spacing.lg, gap: spacing.md, flexShrink: 0,
             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder,
           }}>
-            <Txt variant="h3" color={glassColors.textPrimary}>Tarih Aralığı Bilançosu</Txt>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
+              <Txt variant="h3" color={glassColors.textPrimary} style={{ flexShrink: 1, paddingTop: 4 }}>Tarih Aralığı Bilançosu</Txt>
+              {/* Minimalist, soft dışa aktarma pili — kartın sağ üst köşesinde;
+                  önceki buyuk/ortali GradientButton yerine (bkz. kullanici geri
+                  bildirimi) diger ekranlardaki "⬇︎ Dışa Aktar" pilleriyle
+                  (SiteStatementModal/[module]/index.tsx) AYNI kompakt stil. */}
+              <Pressable
+                onPress={handleExportExcel}
+                disabled={excelExporting || !rangeValid || excelRows.length === 0}
+                hitSlop={8}
+                android_ripple={androidRipple}
+                style={({ pressed }) => [{
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  backgroundColor: c.accentSoft, borderRadius: radius.pill,
+                  paddingVertical: 6, paddingHorizontal: 12,
+                  opacity: (!rangeValid || excelRows.length === 0) ? 0.4 : pressed && Platform.OS === 'ios' ? 0.7 : 1,
+                }, pressScaleStyle(pressed)]}
+              >
+                <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>
+                  {excelExporting ? '…' : '📥 Excel’e Aktar'}
+                </Txt>
+              </Pressable>
+            </View>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Txt variant="tiny" color={c.textFaint}>Başlangıç Ayı</Txt>
@@ -814,6 +893,7 @@ function RangeSummaryModal({ visible, modules, onClose }: {
                 <PeriodSwitcher period={endPeriod} onChange={setEndPeriod} />
               </View>
             </View>
+            {!!excelError && <Txt variant="tiny" color={c.danger}>{excelError}</Txt>}
           </View>
 
           <ScrollView
@@ -929,10 +1009,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(37,99,235,0.35)', borderColor: 'rgba(96,165,250,0.5)',
   },
   // Grafik + legend'i yan yana yerlestiren satir — bkz. kullanici geri
-  // bildirimi: "legend grafigin altina degil, sagina tasinsin".
-  chartRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 16,
-  },
+  // bildirimi: "legend grafigin altina degil, sagina tasinsin". Mobilde
+  // (native) bu satir OLDUGU GIBI birakilir. Web'deki gercek sorun: GlassCard
+  // icerigi varsayilan olarak (RN'in View alignItems:'stretch' varsayimi)
+  // bu satiri karti KAPLAYACAK SEKILDE geniyor, legendCol'daki flex:1 de
+  // kalan TUM bosluga yayiliyor — sonuc olarak justifyContent:'center' hicbir
+  // sey yapamiyor cunku dagitilacak bos alan kalmiyor (pasta hep sol kosede,
+  // legend sağdaki genis bosluga yayilmis goruyor — bkz. kullanici geri
+  // bildirimi: "hala sol tarafa dayali"). Gercek cozum: web'de satirin
+  // KENDISI icerigine gore boyutlansin (alignSelf:'center' ile stretch'i
+  // gecersiz kilar) ve legendCol web'de flex:1 BUYUMESIN (asagida) — boylece
+  // kompakt {pasta+legend} ikilisi kartin ortasinda gorunur.
+  chartRow: Platform.OS === 'web'
+    ? { flexDirection: 'row', alignItems: 'center', gap: 16, alignSelf: 'center', justifyContent: 'center' } as const
+    : { flexDirection: 'row', alignItems: 'center', gap: 16 } as const,
   chartCenter: {
     alignItems: 'center', justifyContent: 'center', maxWidth: 100,
   },
@@ -954,9 +1044,11 @@ const styles = StyleSheet.create({
   sliceTooltipHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
   },
-  legendCol: {
-    flex: 1, gap: 14,
-  },
+  // Native'de flex:1 (kalan alani doldurur, mobilde AYNI kalir). Web'de
+  // flex:1 VERILMEZ — cunku chartRow artik icerige gore boyutlaniyor
+  // (alignSelf:'center'), flex:1 burada legend'i gereksiz yere genisletip
+  // pastayi yine sola iter (bkz. chartRow yorumu).
+  legendCol: Platform.OS === 'web' ? { gap: 14 } as const : { flex: 1, gap: 14 } as const,
   legendItem: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
   },

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { glassColors, useTheme } from '@/lib/theme';
-import { usePostTransaction, useSiteHistory, useUpdateNote } from '@/lib/api';
+import { usePostTransaction, useSetLedgerSkipped, useSiteHistory, useUpdateNote } from '@/lib/api';
 import { currentPeriod, money, num, parseAmount, periodFileLabel, periodLabel } from '@/lib/format';
 import { exportSiteStatementCsv } from '@/lib/export';
-import { finalBalanceState, overpaidAmount, type LedgerRow, type ModuleType } from '@/lib/types';
+import { finalBalanceState, overpaidAmount, type LedgerRow, type ModuleType, type StatusKey } from '@/lib/types';
 import { StatusPill } from './ledger';
 import { EditSiteModal } from './EditSiteModal';
 import { Button, ConfirmModal, Field, ModalShell, Txt } from './ui';
@@ -20,6 +20,90 @@ interface NoteItem {
   period: string;
   notes: string;
   isLocked: boolean;
+}
+
+/**
+ * "Bu Ayı Pasife Al" onay akışı — hem Hızlı Kayıt ekranındaki tekil satır
+ * hem Cari Ekstre'deki (SiteStatementModal) her ay satırı AYNI onay
+ * metnini/mutasyonu paylaşsın diye TEK bir yerde tutulur (bkz. kullanıcı
+ * talebi: "⋯" menüsü zahmetli kaldığı için Hızlı Kayıt ekranına da hızlı
+ * bir giriş noktası eklendi — eskisi KALDIRILMADI, ikisi de aynı mantığı
+ * kullanıyor). `onSkipped` çağıranın kendi UI'ını (yerel override, toast,
+ * modal kapama) güncellemesi için başarı sonrası tetiklenir.
+ */
+function useSkipMonthConfirm(module: ModuleType, onSkipped: (row: LedgerRow, nextSkipped: boolean) => void) {
+  const setSkipped = useSetLedgerSkipped();
+  const [target, setTarget] = useState<LedgerRow | null>(null);
+  const [error, setError] = useState('');
+
+  function open(row: LedgerRow) {
+    setError('');
+    setTarget(row);
+  }
+
+  function cancel() {
+    setTarget(null);
+    setError('');
+  }
+
+  function confirm() {
+    if (!target) return;
+    const nextSkipped = !target.is_skipped;
+    setError('');
+    setSkipped.mutate(
+      { ledgerId: target.ledger_id, siteId: target.site_id, module, skipped: nextSkipped },
+      {
+        onSuccess: () => {
+          onSkipped(target, nextSkipped);
+          setTarget(null);
+        },
+        onError: (err) => setError((err as Error).message),
+      },
+    );
+  }
+
+  const dialog = (
+    <ConfirmModal
+      visible={!!target}
+      title={target?.is_skipped ? 'Pasiflik Kaldırılsın mı?' : 'Bu Ayı Pasife Al'}
+      message={target
+        ? (target.is_skipped
+            ? `${periodLabel(target.period)} dönemi için pasiflik kaldırılsın mı? Bu ay yeniden Kasa Özeti, Bilanço ve Excel hesaplamalarına dahil edilecek.`
+            : `${periodLabel(target.period)} ayına ait ödemeleri pasife çekmek istiyorsunuz. Sistem bu aya ait beklenen ödemeyi yok sayacak ve genel bakiyeyi (mizanı) bozmamak için bu ayı hesaplamalara dahil etmeyecektir. Onaylıyor musunuz?`)
+        : undefined}
+      confirmLabel={target?.is_skipped ? 'Evet, Aktif Et' : 'Onaylıyorum'}
+      cancelLabel="Vazgeç"
+      danger={!target?.is_skipped}
+      loading={setSkipped.isPending}
+      onConfirm={confirm}
+      onCancel={cancel}
+    />
+  );
+
+  return { open, dialog, error, pending: setSkipped.isPending };
+}
+
+/** Baslikdaki kompakt eylem pilleri — "Tüm Ayları Görüntüle" / "Düzenle" / "Bu Ayı Pasife Al" AYNI stil. */
+function HeaderPillButton({ icon, label, tone = 'accent', onPress }: {
+  icon: string; label: string; tone?: 'accent' | 'danger'; onPress: () => void;
+}) {
+  const { c, spacing, radius } = useTheme();
+  const color = tone === 'danger' ? c.danger : c.accent;
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      android_ripple={androidRipple}
+      style={({ pressed }) => [{
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
+        borderRadius: radius.sm,
+        backgroundColor: tone === 'danger' ? c.dangerSoft : (pressed && Platform.OS === 'ios' ? glassColors.cardBgSoft : 'transparent'),
+      }, pressScaleStyle(pressed)]}
+    >
+      <Txt variant="small" color={color} style={{ fontWeight: '700' }}>{icon} {label}</Txt>
+    </Pressable>
+  );
 }
 
 export function QuickEntryModal({ row, module, period, canEdit, onClose, onSuccess, onSiteUpdated, onNavigateToPeriod, onOpenStatement }: {
@@ -47,6 +131,17 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   const mutation = usePostTransaction(module, period);
   const updateNote = useUpdateNote(module, period);
   const history = useSiteHistory(row?.site_id, module, period);
+  // "⋯" menüsüne gitmeden Hızlı Kayıt ekranından da tek dokunuşla erişim
+  // (bkz. kullanıcı geri bildirimi: "Cari Ekstre'ye girip üç noktaya basmak
+  // zahmetli oldu"). Durum degistirdigi icin (hesaplamalari etkiler) basari
+  // sonrasi modal kapatilip toast gosterilir — EditSiteModal ile AYNI patern
+  // (bkz. handleSiteUpdated).
+  const skip = useSkipMonthConfirm(module, (target, nextSkipped) => {
+    onSiteUpdated(nextSkipped
+      ? `${periodLabel(target.period)} dönemi hesaplamalardan hariç tutuldu.`
+      : `${periodLabel(target.period)} dönemi yeniden hesaplamalara dahil edildi.`);
+    onClose();
+  });
 
   const [extraText, setExtraText] = useState('');
   const [paymentText, setPaymentText] = useState('');
@@ -81,9 +176,17 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   const carryoverCleared = carriedOverAmount > 0 && overpaidThisMonth && netAfterCarryover <= 0.01;
   const carryoverStillOwed = carriedOverAmount > 0 && overpaidThisMonth && netAfterCarryover > 0.01;
   const extraCreditAfterClear = carryoverCleared && netAfterCarryover < -0.01 ? -netAfterCarryover : 0;
-  // Gecmisten borc yokken sadece bu ay fazla odeme girildiyse: ham negatif
-  // "Bu Ay Kalan" yerine pozitif "Bu Ay Fazla Ödenen" gosterilir.
-  const thisMonthOverpaidAmount = !carryoverCleared && !carryoverStillOwed ? overpaidAmount(num(row.balance)) : null;
+  // "Bu Ay Kalan" MiniStat'i HER ZAMAN bu AYIN KENDI tutarlarina gore
+  // (Bu Ay Toplam - Bu Ay Odenen) okunur — gecmisten devreden borcun
+  // kapanip kapanmadigindan BAGIMSIZ. Eskiden gecmis borc kapandiginda
+  // (carryoverCleared) burada HAM negatif bakiye ("-16.850,00") yesil
+  // renkte gosteriliyordu — renk doğru ama yazı "Kalan" oldugu icin esnaf
+  // "hala borc mu var" diye kafasi karisiyordu (bkz. kullanici geri
+  // bildirimi). Bu ay fazla odeme varsa HER DURUMDA "Bu Ay Fazla Ödenen"
+  // + pozitif tutar gosterilir; gecmis borcla ilgili net durum zaten ayrı
+  // renkli kutularda (carryoverCleared/carryoverStillOwed, asagida)
+  // acikca anlatiliyor.
+  const thisMonthOverpaidAmount = overpaidAmount(num(row.balance));
   const thisMonthRemaining = thisMonthOverpaidAmount !== null
     ? { label: 'Bu Ay Fazla Ödenen', value: String(thisMonthOverpaidAmount), color: c.ok }
     : { label: 'Bu Ay Kalan', value: row.balance, color: num(row.balance) > 0 ? c.danger : c.ok };
@@ -137,39 +240,42 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
   return (
     <>
     <ModalShell visible={visible} onClose={handleClose} keyboardAvoiding maxHeightRatio={0.88}>
+            {/* Baslik kendi satirinda TEK BASINA — eskiden site adi 2 pil butonla
+                aynı satırı paylaşıyordu, uzun site isimleri kesiliyordu (bkz.
+                kullanıcı geri bildirimi: "üstte yazı çok sıkışık, site isimleri
+                sığmamış görünüyor"). Eylem pilleri ALTTA, ayrı ve sarmalanabilir
+                (flexWrap) bir satırda. */}
             <View style={{
-              padding: spacing.lg, flexShrink: 0,
+              padding: spacing.lg, gap: spacing.sm, flexShrink: 0,
               borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: glassColors.cardBorder,
-              flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm,
             }}>
-              <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ gap: 2 }}>
                 <Txt variant="h3">Hızlı Kayıt</Txt>
-                <Txt variant="small" color={c.textMuted} numberOfLines={1}>{row.site_name}</Txt>
+                <Txt variant="small" color={c.textMuted} numberOfLines={2}>{row.site_name}</Txt>
               </View>
-              <Pressable
-                onPress={() => onOpenStatement(row.site_name, row, history.data ?? [])}
-                hitSlop={8}
-                android_ripple={androidRipple}
-                style={({ pressed }) => [{
-                  paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
-                  borderRadius: radius.sm, backgroundColor: pressed && Platform.OS === 'ios' ? glassColors.cardBgSoft : 'transparent',
-                }, pressScaleStyle(pressed)]}
-              >
-                <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>📋 Tüm Ayları Görüntüle</Txt>
-              </Pressable>
-              {canEdit && (
-                <Pressable
-                  onPress={() => setEditSiteOpen(true)}
-                  hitSlop={8}
-                  android_ripple={androidRipple}
-                  style={({ pressed }) => [{
-                    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
-                    borderRadius: radius.sm, backgroundColor: pressed && Platform.OS === 'ios' ? glassColors.cardBgSoft : 'transparent',
-                  }, pressScaleStyle(pressed)]}
-                >
-                  <Txt variant="small" color={c.accent} style={{ fontWeight: '700' }}>✎ Düzenle</Txt>
-                </Pressable>
-              )}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                <HeaderPillButton
+                  icon="📋" label="Tüm Ayları Görüntüle"
+                  onPress={() => onOpenStatement(row.site_name, row, history.data ?? [])}
+                />
+                {canEdit && (
+                  <HeaderPillButton icon="✎" label="Düzenle" onPress={() => setEditSiteOpen(true)} />
+                )}
+                {/* "Bu Ayı Pasife Al" — Cari Ekstre'deki "⋯" menüsüyle AYNI eylem,
+                    buraya sadece daha hizli erisim icin eklendi (bkz. kullanici
+                    geri bildirimi: "⋯" menüsüne gitmek zahmetli oldu; eskisi
+                    KALDIRILMADI). Hesaplamalari etkiledigi icin sadece
+                    yetkili (admin/operator) kullanicilara gosterilir. */}
+                {canEdit && (
+                  <HeaderPillButton
+                    icon={row.is_skipped ? '↩️' : '🚫'}
+                    label={row.is_skipped ? 'Pasifliği Kaldır' : 'Bu Ayı Pasife Al'}
+                    tone="danger"
+                    onPress={() => skip.open(row)}
+                  />
+                )}
+              </View>
+              {!!skip.error && <Txt variant="tiny" color={c.danger}>{skip.error}</Txt>}
             </View>
 
             <ScrollView
@@ -346,6 +452,8 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
         onClose={() => setEditSiteOpen(false)}
         onSuccess={handleSiteUpdated}
       />
+
+      {skip.dialog}
     </>
   );
 }
@@ -357,18 +465,52 @@ export function QuickEntryModal({ row, module, period, canEdit, onClose, onSucce
  * bazi mobil tarayicilarda ic ice Modal'larda dokunmatik scroll calismama
  * sorunu yasanmisti — bkz. kullanici geri bildirimi).
  */
-export function SiteStatementModal({ visible, siteName, currentRow, historyRows, onClose }: {
+export function SiteStatementModal({ visible, siteName, module, currentRow, historyRows, onClose, onChanged }: {
   visible: boolean;
   siteName: string;
+  /** set_ledger_skipped RPC'si icin site erisim/modul dogrulamasi ve query invalidasyonu */
+  module: ModuleType;
   currentRow: LedgerRow | null;
   historyRows: LedgerRow[];
   onClose: () => void;
+  /** Bir ay pasife alindiginda/geri alindiginda gosterilecek bildirim mesaji */
+  onChanged?: (message: string) => void;
 }) {
   const { c, spacing, radius } = useTheme();
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  // Bu modal, acildigi anda alinan currentRow/historyRows SNAPSHOT'ini
+  // prop olarak alir (bkz. QuickEntryModal.onOpenStatement) — mutation
+  // sonrasi sunucudan taze veri gelene kadar (ledger/site-history invalide
+  // edilir, ama BU modal kapanip yeniden acilana dek prop'lar degismez)
+  // dokunulan satirin rozetini ANINDA guncellemek icin yerel bir override
+  // katmani tutulur (bkz. useSkipMonthConfirm — Hızlı Kayıt ekranındaki
+  // hızlı erişimle AYNI paylaşılan onay/mutasyon mantığı).
+  const [overrides, setOverrides] = useState<Record<string, { is_skipped: boolean; status_key: StatusKey; status_label: string }>>({});
+  const skip = useSkipMonthConfirm(module, (target, nextSkipped) => {
+    setOverrides(prev => {
+      if (nextSkipped) {
+        return { ...prev, [target.ledger_id]: { is_skipped: true, status_key: 'skipped', status_label: 'Bu Ay Pasife Alındı' } };
+      }
+      const { [target.ledger_id]: _removed, ...rest } = prev;
+      return rest;
+    });
+    onChanged?.(nextSkipped
+      ? `${periodLabel(target.period)} dönemi hesaplamalardan hariç tutuldu.`
+      : `${periodLabel(target.period)} dönemi yeniden hesaplamalara dahil edildi.`);
+  });
+
+  // Modal her yeni site icin acildiginda onceki oturumun override'lari temizlenir.
+  useEffect(() => {
+    if (visible) setOverrides({});
+  }, [visible, currentRow?.site_id]);
+
   if (!currentRow) return null;
-  const rows = [currentRow, ...historyRows].slice().sort((a, b) => b.period.localeCompare(a.period));
+  const rows = [currentRow, ...historyRows]
+    .slice()
+    .sort((a, b) => b.period.localeCompare(a.period))
+    .map(r => (overrides[r.ledger_id] ? { ...r, ...overrides[r.ledger_id] } : r));
+  const hasStaleTotals = Object.keys(overrides).length > 0;
   // Site duzeyinde: hangi donem satirina bakilirsa bakilsin AYNI deger —
   // sitenin BUGUNE kadarki nihai net bakiyesi (bkz. kullanici geri bildirimi,
   // Bozyel 4 senaryosu: gecmis kirmizilarin bugune yansiyan toplami).
@@ -389,6 +531,7 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
   }
 
   return (
+    <>
     <ModalShell visible={visible} onClose={onClose} maxHeightRatio={0.85}>
           <View style={{
             padding: spacing.lg, gap: spacing.sm, flexShrink: 0,
@@ -417,6 +560,7 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
               </Pressable>
             </View>
             {!!exportError && <Txt variant="tiny" color={c.danger}>{exportError}</Txt>}
+            {!!skip.error && <Txt variant="tiny" color={c.danger}>{skip.error}</Txt>}
             <View style={{
               backgroundColor: finalState.kind === 'debt' ? c.dangerSoft : c.okSoft,
               borderRadius: radius.md, padding: spacing.md, gap: 2,
@@ -432,6 +576,11 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
                     : 'Sıfırlandı / Borcu Yok'}
               </Txt>
             </View>
+            {hasStaleTotals && (
+              <Txt variant="tiny" color={c.textFaint}>
+                ℹ️ Az önce bir ayın pasiflik durumu değişti — güncel toplam bakiyeleri görmek için bu pencereyi kapatıp tekrar açın.
+              </Txt>
+            )}
           </View>
 
           <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }} {...bounceScrollProps}>
@@ -447,11 +596,35 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
                     borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)',
                     borderLeftWidth: isCurrent ? 3 : 0, borderLeftColor: glassColors.primaryLight,
                     paddingTop: spacing.md, paddingLeft: isCurrent ? spacing.sm : 0, gap: spacing.xs,
+                    // Pasife alınan ay soluk görünsün — bkz. kullanıcı geri
+                    // bildirimi: rozet yeterli değil, satırın kendisi de
+                    // "hesap dışı" hissettirmeli (aktif/pasif site satırlarıyla
+                    // AYNI dil — bkz. LedgerListItem !isActive opacity).
+                    opacity: r.is_skipped ? 0.55 : 1,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{periodLabel(r.period)}</Txt>
-                    <StatusPill statusKey={r.status_key} label={r.status_label} small />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 }}>
+                      <Txt variant="small" color={c.text} style={{ fontWeight: '700' }}>{periodLabel(r.period)}</Txt>
+                      <StatusPill statusKey={r.status_key} label={r.status_label} small />
+                    </View>
+                    {/* "Bu Ayı Pasife Al" istisnası — sözleşme feshinden (EditSiteModal'daki
+                        "Pasife Al") TAMAMEN AYRI: sadece BU tek ayı genel hesaplamalardan
+                        hariç tutar/geri katar (bkz. useSkipMonthConfirm, set_ledger_skipped).
+                        Hızlı Kayıt ekranında da AYNI eyleme hızlı erişim var (bkz. HeaderPillButton) —
+                        bu "⋯" menüsü zahmetli oldugu icin EKLENDI, yerini KORUR. */}
+                    <Pressable
+                      onPress={() => skip.open(r)}
+                      disabled={skip.pending}
+                      hitSlop={10}
+                      android_ripple={{ ...androidRipple, borderless: true }}
+                      style={({ pressed }) => [{
+                        width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center',
+                        opacity: skip.pending ? 0.4 : pressed && Platform.OS === 'ios' ? 0.6 : 1,
+                      }, pressScaleStyle(pressed)]}
+                    >
+                      <Txt variant="h3" color={c.textFaint}>⋯</Txt>
+                    </Pressable>
                   </View>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
                     <MiniStat label="Aidat" value={r.base_fee} color={c.textMuted} />
@@ -473,6 +646,9 @@ export function SiteStatementModal({ visible, siteName, currentRow, historyRows,
             <Button title="Kapat" variant="secondary" onPress={onClose} />
           </View>
     </ModalShell>
+
+      {skip.dialog}
+    </>
   );
 }
 

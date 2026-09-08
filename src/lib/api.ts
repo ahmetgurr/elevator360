@@ -536,6 +536,43 @@ export function usePostTransaction(module: ModuleType, period: string) {
   });
 }
 
+export interface SetLedgerSkippedInput {
+  ledgerId: string;
+  siteId: string;
+  module: ModuleType;
+  /** true: "Bu Ayı Pasife Al" istisnasını uygular; false: geri alır */
+  skipped: boolean;
+}
+
+/**
+ * "Bu Ayı Pasife Al" — Cari Ekstre'de tek bir ay için istisna. Sözleşme
+ * feshi (useDeactivateSite) İLE KARIŞTIRILMAMALI: gelecek ayları iptal
+ * etmez, geçmişi bozmaz — sadece set_ledger_skipped() RPC'si üzerinden
+ * (0014_ledger_period_skip.sql) o AYI genel hesaplamalardan (Kasa Özeti,
+ * Bilanço, devir/nihai bakiye, Tüm Yılı Göster Excel'i) hariç tutar/geri
+ * katar. Bu satırın devir/nihai bakiyeye katkısı diğer TÜM dönemlerin
+ * gösterimini etkileyebildiğinden ('ledger', module) ve ('summary', module)
+ * anahtarları donem ayrimi yapilmadan (prefix) genis invalide edilir.
+ */
+export function useSetLedgerSkipped() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: SetLedgerSkippedInput) => {
+      const { error } = await supabase.rpc('set_ledger_skipped', {
+        p_ledger_id: input.ledgerId,
+        p_skipped: input.skipped,
+      });
+      if (error) throw new Error(translateDbError(error.message));
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['ledger', vars.module] });
+      qc.invalidateQueries({ queryKey: ['summary', vars.module] });
+      qc.invalidateQueries({ queryKey: ['site-history', vars.siteId, vars.module] });
+      qc.invalidateQueries({ queryKey: ['range-summary', vars.module] });
+    },
+  });
+}
+
 export function translateDbError(msg: string): string {
   if (/entries_client_request_uniq/i.test(msg))
     return 'Bu işlem zaten kaydedilmiş. Aynı kayıt ikinci kez işlenmedi.';

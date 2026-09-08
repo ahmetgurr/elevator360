@@ -2,7 +2,7 @@
 import { isFuturePeriod } from './format';
 
 export type ModuleType = 'elevator' | 'cleaning';
-export type StatusKey = 'pending' | 'partial' | 'overdue' | 'overdue_partial' | 'completed' | 'overpaid';
+export type StatusKey = 'pending' | 'partial' | 'overdue' | 'overdue_partial' | 'completed' | 'overpaid' | 'skipped';
 export type PaymentState = 'pending' | 'partial' | 'paid' | 'overpaid';
 export type UserRole = 'admin' | 'operator' | 'viewer';
 
@@ -56,6 +56,8 @@ export interface LedgerRow {
   site_notes: string | null;
   /** Sitenin BUGUNE kadarki nihai net bakiyesi — hangi donem satirina bakilirsa bakilsin AYNIDIR */
   site_current_balance: string;
+  /** "Bu Ayı Pasife Al" istisnasi — true ise bu tek ay genel hesaplamalardan (kasa ozeti/bilanco/devir/Excel) haric tutulur. Sozlesme feshinden (contract_status) tamamen bagimsizdir — bkz. set_ledger_skipped RPC'si. */
+  is_skipped: boolean;
 }
 
 /**
